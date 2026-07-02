@@ -336,6 +336,7 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
         endPct,
         isOpen: !s.endTime,
         isOfficialBreak,
+        isManual,
         startTimeLabel: formatAttendanceTime(s.startTime),
         endTimeLabel: s.endTime ? formatAttendanceTime(s.endTime) : 'Ongoing'
       };
@@ -552,11 +553,12 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
           return false;
         }
 
-        const isStartInBreak = getScheduledBreakInfo(breakStart).isBreak;
-        const isManual = !desktopLogs.some(l => Math.abs(new Date(l.timestamp).getTime() - breakStart.getTime()) < 60000);
+        // Only hide the desktop log if the corresponding break is official or manual
+        const mapped = breakSessionsMapped.find(m => m.id === session.id);
+        if (!mapped) return false;
         
-        // Only hide the desktop log if the corresponding break is official/scheduled or manual
-        if (!isStartInBreak && !isManual) {
+        const isOfficial = mapped.isOfficialBreak || mapped.isManual;
+        if (!isOfficial) {
           return false;
         }
 
@@ -598,13 +600,14 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
     // 4. Break Sessions
     breakSessions.forEach((session) => {
       const startD = new Date(session.startTime);
-      const breakInfo = getScheduledBreakInfo(startD);
-      const isManual = !desktopLogs.some(l => Math.abs(new Date(l.timestamp).getTime() - startD.getTime()) < 60000);
 
-      // If it is not a scheduled break hour and not manually triggered from the web,
-      // we skip displaying it as a "Break" text item in the Event Log.
-      // Instead, the Event Log will show the actual desktop events (Screen Locked, Went Idle, etc.)
-      if (!breakInfo.isBreak && !isManual) {
+      // Only display official or manual break sessions as official breaks in the Event Log.
+      // Non-official/short breaks fallback to raw desktop logs.
+      const mapped = breakSessionsMapped.find(m => m.id === session.id);
+      if (!mapped) return;
+
+      const isOfficial = mapped.isOfficialBreak || mapped.isManual;
+      if (!isOfficial) {
         return;
       }
 
@@ -616,6 +619,7 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
         }
       }
 
+      const breakInfo = getScheduledBreakInfo(startD);
       const name = breakInfo.type || "Custom Break";
 
       items.push({
@@ -638,7 +642,7 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
 
     // Sort chronologically
     return items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-  }, [checkInTime, checkOutTime, desktopLogs, breakSessions]);
+  }, [checkInTime, checkOutTime, desktopLogs, breakSessions, breakSessionsMapped]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (isExpanded) return;
