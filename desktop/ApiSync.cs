@@ -107,6 +107,7 @@ namespace HRMS_Agent
         private static bool _isProcessingQueue = false;
 
         public static ShiftRecord? CurrentShift { get; private set; }
+        public static string? LastLoggedEvent { get; set; }
 
         public static event Action<string>? OnStatusChanged;
         public static event Action<string, DateTime>? OnEventLogged;
@@ -318,6 +319,7 @@ namespace HRMS_Agent
         public static async Task LogEventAsync(string eventType)
         {
             OnEventLogged?.Invoke(eventType, DateTime.Now);
+            LastLoggedEvent = eventType;
 
             var newEvent = new DesktopEvent
             {
@@ -351,6 +353,18 @@ namespace HRMS_Agent
 
                 using var cts = new System.Threading.CancellationTokenSource(3000); // 3 seconds timeout
                 var response = await _httpClient.SendAsync(request, cts.Token);
+
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    if (await TryRefreshTokenAsync())
+                    {
+                        using var retryReq = new HttpRequestMessage(HttpMethod.Post, $"{_config.ApiUrl}/api/attendance/desktop-event");
+                        retryReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _config.Token);
+                        retryReq.Content = new StringContent(json, Encoding.UTF8, "application/json");
+                        response = await _httpClient.SendAsync(retryReq, cts.Token);
+                    }
+                }
+
                 return response.IsSuccessStatusCode;
             }
             catch

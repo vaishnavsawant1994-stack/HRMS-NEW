@@ -42,7 +42,7 @@ namespace HRMS_Agent
             }
         }
 
-        private static uint GetIdleTimeMs()
+        public static uint GetIdleTimeMs()
         {
             LASTINPUTINFO lii = new LASTINPUTINFO();
             lii.cbSize = (uint)Marshal.SizeOf(lii);

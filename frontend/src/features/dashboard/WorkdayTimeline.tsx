@@ -164,11 +164,11 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
           const now = new Date();
           const tenMins = 10 * 60000;
           
-          if (lastActiveTime && now.getTime() - lastActiveTime.getTime() > tenMins) {
+          if (lastActiveTime && checkInTime && lastActiveTime.getTime() > new Date(checkInTime).getTime() && now.getTime() - lastActiveTime.getTime() > tenMins) {
             activeEnd = lastActiveTime;
-          } else if (!lastActiveTime && desktopLogs.length > 0) {
+          } else if (desktopLogs.length > 0 && checkInTime) {
             const lastLogTime = new Date(desktopLogs[desktopLogs.length - 1].timestamp);
-            if (now.getTime() - lastLogTime.getTime() > tenMins) {
+            if (lastLogTime.getTime() > new Date(checkInTime).getTime() && now.getTime() - lastLogTime.getTime() > tenMins) {
               activeEnd = lastLogTime;
             }
           }
@@ -248,6 +248,9 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
             let state: 'active' | 'idle' | 'locked' = 'active';
             for (const log of sortedLogs) {
               const logTime = new Date(log.timestamp).getTime();
+              if (checkInTime && logTime < new Date(checkInTime).getTime()) {
+                continue;
+              }
               if (logTime <= timeAtMinute) {
                 if (log.eventType === 'LOCK' || log.eventType === 'SLEEP' || log.eventType === 'SHUTDOWN') {
                   state = 'locked';
@@ -746,11 +749,11 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
         const now = new Date();
         const tenMins = 10 * 60000;
         
-        if (lastActiveTime && now.getTime() - lastActiveTime.getTime() > tenMins) {
+        if (lastActiveTime && checkInTime && lastActiveTime.getTime() > new Date(checkInTime).getTime() && now.getTime() - lastActiveTime.getTime() > tenMins) {
           activeEnd = lastActiveTime;
-        } else if (!lastActiveTime && desktopLogs.length > 0) {
+        } else if (desktopLogs.length > 0 && checkInTime) {
           const lastLogTime = new Date(desktopLogs[desktopLogs.length - 1].timestamp);
-          if (now.getTime() - lastLogTime.getTime() > tenMins) {
+          if (lastLogTime.getTime() > new Date(checkInTime).getTime() && now.getTime() - lastLogTime.getTime() > tenMins) {
             activeEnd = lastLogTime;
           }
         }

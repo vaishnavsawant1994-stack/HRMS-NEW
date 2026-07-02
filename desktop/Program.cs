@@ -343,6 +343,47 @@ namespace HRMS_Agent
             var breaks = await ApiSync.GetBreaksTodayAsync();
             var logs = await ApiSync.GetDesktopActivityLogsTodayAsync();
 
+            if (logs != null && logs.Count > 0)
+            {
+                ApiSync.LastLoggedEvent = logs[logs.Count - 1].EventType;
+            }
+
+            // Stale status self-healing: if user is active (idle < 15s) but last DB state was Away/Locked/Sleep
+            uint currentIdleMs = IdleTracker.GetIdleTimeMs();
+            if (currentIdleMs < 15000 && ApiSync.LastLoggedEvent != null)
+            {
+                if (ApiSync.LastLoggedEvent == "LOCK")
+                {
+                    await ApiSync.LogEventAsync("UNLOCK");
+                    var newLogs = await ApiSync.GetDesktopActivityLogsTodayAsync();
+                    if (newLogs != null && newLogs.Count > 0)
+                    {
+                        logs = newLogs;
+                        ApiSync.LastLoggedEvent = logs[logs.Count - 1].EventType;
+                    }
+                }
+                else if (ApiSync.LastLoggedEvent == "SLEEP")
+                {
+                    await ApiSync.LogEventAsync("WAKE");
+                    var newLogs = await ApiSync.GetDesktopActivityLogsTodayAsync();
+                    if (newLogs != null && newLogs.Count > 0)
+                    {
+                        logs = newLogs;
+                        ApiSync.LastLoggedEvent = logs[logs.Count - 1].EventType;
+                    }
+                }
+                else if (ApiSync.LastLoggedEvent == "IDLE_START")
+                {
+                    await ApiSync.LogEventAsync("IDLE_END");
+                    var newLogs = await ApiSync.GetDesktopActivityLogsTodayAsync();
+                    if (newLogs != null && newLogs.Count > 0)
+                    {
+                        logs = newLogs;
+                        ApiSync.LastLoggedEvent = logs[logs.Count - 1].EventType;
+                    }
+                }
+            }
+
             UpdateTrayContextMenu(attendance, breaks);
 
             // Forward state to the Dashboard mini-app window

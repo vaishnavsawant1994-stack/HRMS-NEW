@@ -365,12 +365,16 @@
     "developer": "Fullstack Team",
     "completedTasks": [
       "TSK-ATT-027",
-      "TSK-ATT-028"
+      "TSK-ATT-028",
+      "TSK-ATT-029",
+      "TSK-ATT-030"
     ],
     "inProgressTasks": [],
     "newTasksCreated": [
       "TSK-ATT-027",
-      "TSK-ATT-028"
+      "TSK-ATT-028",
+      "TSK-ATT-029",
+      "TSK-ATT-030"
     ],
     "bugsFixed": [
       "Fixed C# desktop agent break naming and redundancy: implemented scheduled hours check (GetScheduledBreakInfo) and desktop log filtering in DashboardForm.cs, aligning the desktop log list formatting with the web dashboard.",
@@ -381,7 +385,10 @@
       "Fixed desktop agent auto-polling not updating the dashboard state while hidden in tray.",
       "Filtered out idle segments and events under 10 minutes from both visual timelines and event logs.",
       "Fixed desktop agent UI layout bugs on high-DPI laptops and maximized screen states: increased the left panel actions ratio to 48% (expanding quick action buttons to 145px width to eliminate text truncation), added taller label heights to handle vertical scaling, dynamically bounded the footer account email label, and centered layout buttons vertically when maximized instead of pushing them off-screen.",
-      "Added support for custom branding icon: updated C# agent forms and tray icon to load dynamically from the application's embedded icon resource."
+      "Added support for custom branding icon: updated C# agent forms and tray icon to load dynamically from the application's embedded icon resource.",
+      "Deduplicated consecutive identical desktop logs occurring within 60 seconds of each other in the WorkdayTimeline event log to prevent layout clutter.",
+      "Fixed Yash showing as AWAY on live status by ignoring raw desktop logs recorded prior to the employee's check-in timestamp.",
+      "Fixed manual check-in employees showing as OFFLINE on live status by removing the offline agent status force-override."
     ],
     "blockers": [],
     "hoursWorked": 8,
