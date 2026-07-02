@@ -1839,13 +1839,25 @@ router.get("/live-status", requireRoles("ADMIN", "HR", "MANAGER", "EMPLOYEE"), a
       const todayAttendance = emp.attendances[0] ?? null;
       const lastLog = emp.desktopActivityLogs[0] ?? null;
 
+      const checkInTimeDate = todayAttendance?.checkInTime ? new Date(todayAttendance.checkInTime) : null;
+      const checkOutTimeDate = todayAttendance?.checkOutTime ? new Date(todayAttendance.checkOutTime) : null;
+      
+      // Only consider logs that occurred during/after the current check-in (and before check-out if checked out)
+      const isLogDuringWorkday = lastLog && checkInTimeDate && (
+        new Date(lastLog.timestamp).getTime() >= checkInTimeDate.getTime()
+      ) && (
+        !checkOutTimeDate || new Date(lastLog.timestamp).getTime() <= checkOutTimeDate.getTime()
+      );
+
+      const effectiveLastLog = isLogDuringWorkday ? lastLog : null;
+
       let status: "ACTIVE" | "AWAY" | "OFFLINE" = "OFFLINE";
       let lastEvent: string | null = null;
       let lastEventTime: Date | null = null;
 
-      if (lastLog) {
-        lastEvent = lastLog.eventType;
-        lastEventTime = lastLog.timestamp;
+      if (effectiveLastLog) {
+        lastEvent = effectiveLastLog.eventType;
+        lastEventTime = effectiveLastLog.timestamp;
       }
 
       if (todayAttendance) {
@@ -1853,7 +1865,7 @@ router.get("/live-status", requireRoles("ADMIN", "HR", "MANAGER", "EMPLOYEE"), a
         if (todayAttendance.checkOutTime) {
           status = "OFFLINE";
         } else if (todayAttendance.checkInTime) {
-          if (hasActiveBreak || (lastLog && ["LOCK", "SLEEP", "IDLE_START"].includes(lastLog.eventType))) {
+          if (hasActiveBreak || (effectiveLastLog && ["LOCK", "SLEEP", "IDLE_START"].includes(effectiveLastLog.eventType))) {
             status = "AWAY";
           } else {
             status = "ACTIVE";
