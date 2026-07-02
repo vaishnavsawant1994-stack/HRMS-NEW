@@ -105,6 +105,7 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
   const [breakSessions, setBreakSessions] = useState<BreakSession[]>([]);
 
   const [desktopLogs, setDesktopLogs] = useState<DesktopActivityLog[]>([]);
+  const [lastDesktopActive, setLastDesktopActive] = useState<string | null>(null);
 
   // Hover Tooltip State
   const [hoverText, setHoverText] = useState<string | null>(null);
@@ -126,8 +127,9 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
       if (dateContext) qs.append('date', dateContext);
       
       const endpoint = `/attendance/desktop-activity-log?${qs.toString()}`;
-      const res = await apiRequest<{ events: DesktopActivityLog[] }>(endpoint, { token: token || undefined });
+      const res = await apiRequest<{ events: DesktopActivityLog[], lastDesktopActive: string | null }>(endpoint, { token: token || undefined });
       setDesktopLogs(res.data?.events ?? []);
+      setLastDesktopActive(res.data?.lastDesktopActive ?? null);
     } catch { /* ignore */ }
   }, [employeeId, dateContext, token]);
 
@@ -153,7 +155,25 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
       
       // Determine logical endpoint for active tracking
       let activeEnd = new Date();
-      if (!isDateToday) {
+      if (isDateToday) {
+        if (checkOutTime) {
+          activeEnd = new Date(checkOutTime);
+        } else {
+          // If the agent is offline (no heartbeat/activity in 10 minutes), bound tracking to the last active time
+          const lastActiveTime = lastDesktopActive ? new Date(lastDesktopActive) : null;
+          const now = new Date();
+          const tenMins = 10 * 60000;
+          
+          if (lastActiveTime && now.getTime() - lastActiveTime.getTime() > tenMins) {
+            activeEnd = lastActiveTime;
+          } else if (!lastActiveTime && desktopLogs.length > 0) {
+            const lastLogTime = new Date(desktopLogs[desktopLogs.length - 1].timestamp);
+            if (now.getTime() - lastLogTime.getTime() > tenMins) {
+              activeEnd = lastLogTime;
+            }
+          }
+        }
+      } else {
         if (checkOutTime) {
           activeEnd = new Date(checkOutTime);
         } else if (desktopLogs.length > 0) {
@@ -406,7 +426,25 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
 
     const isDateToday = dateContext ? isToday(dateContext) : true;
     let finalEndValue = new Date();
-    if (!isDateToday) {
+    if (isDateToday) {
+      if (checkOutTime) {
+        finalEndValue = new Date(checkOutTime);
+      } else {
+        // If the agent is offline (no heartbeat/activity in 10 minutes), bound tracking to the last active time
+        const lastActiveTime = lastDesktopActive ? new Date(lastDesktopActive) : null;
+        const now = new Date();
+        const tenMins = 10 * 60000;
+        
+        if (lastActiveTime && now.getTime() - lastActiveTime.getTime() > tenMins) {
+          finalEndValue = lastActiveTime;
+        } else if (!lastActiveTime && desktopLogs.length > 0) {
+          const lastLogTime = new Date(desktopLogs[desktopLogs.length - 1].timestamp);
+          if (now.getTime() - lastLogTime.getTime() > tenMins) {
+            finalEndValue = lastLogTime;
+          }
+        }
+      }
+    } else {
       if (checkOutTime) {
         finalEndValue = new Date(checkOutTime);
       } else if (desktopLogs.length > 0) {
@@ -699,7 +737,25 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
     const isDateToday = dateContext ? isToday(dateContext) : true;
     
     let activeEnd = new Date();
-    if (!isDateToday) {
+    if (isDateToday) {
+      if (checkOutTime) {
+        activeEnd = new Date(checkOutTime);
+      } else {
+        // If the agent is offline (no heartbeat/activity in 10 minutes), bound tracking to the last active time
+        const lastActiveTime = lastDesktopActive ? new Date(lastDesktopActive) : null;
+        const now = new Date();
+        const tenMins = 10 * 60000;
+        
+        if (lastActiveTime && now.getTime() - lastActiveTime.getTime() > tenMins) {
+          activeEnd = lastActiveTime;
+        } else if (!lastActiveTime && desktopLogs.length > 0) {
+          const lastLogTime = new Date(desktopLogs[desktopLogs.length - 1].timestamp);
+          if (now.getTime() - lastLogTime.getTime() > tenMins) {
+            activeEnd = lastLogTime;
+          }
+        }
+      }
+    } else {
       if (checkOutTime) {
         activeEnd = new Date(checkOutTime);
       } else if (desktopLogs.length > 0) {

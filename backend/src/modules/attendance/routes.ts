@@ -30,6 +30,11 @@ import { queueAttendanceSync } from "../../services/googleSheets.service.js";
 
 const router = Router();
 
+// In-memory sets to serialize break starts and desktop event processing per employee ID.
+// This completely prevents race conditions (concurrent double-clicks/posts) on active operations.
+const activeBreakOperations = new Set<number>();
+const activeDesktopEventOperations = new Set<number>();
+
 const attendanceSchema = z.object({
   employeeId: z.coerce.number().int().positive().optional(),
   todaysUpdate: z.string().optional(),
@@ -477,10 +482,15 @@ router.get("/break/today", async (request, response, next) => {
 });
 
 router.post("/break/start", async (request, response, next) => {
-  try {
-    const employeeId = request.user?.employeeId;
-    if (!employeeId) throw new AppError("Employee context is required", 400);
+  const employeeId = request.user?.employeeId;
+  if (!employeeId) throw new AppError("Employee context is required", 400);
 
+  if (activeBreakOperations.has(employeeId)) {
+    return next(new AppError("A break request is already being processed. Please wait.", 429));
+  }
+  activeBreakOperations.add(employeeId);
+
+  try {
     const today = startOfDay(new Date());
     const attendance = await prisma.attendance.findFirst({
       where: { employeeId, attendanceDate: buildAttendanceWhereForDate(today) },
@@ -505,6 +515,19 @@ router.post("/break/start", async (request, response, next) => {
     });
     if (openBreak) throw new AppError("A break is already in progress");
 
+    // Guard against concurrent rapid double-clicks or duplicates
+    const recentBreak = await prisma.breakSession.findFirst({
+      where: {
+        employeeId,
+        startTime: {
+          gte: new Date(Date.now() - 5000)
+        }
+      }
+    });
+    if (recentBreak) {
+      return sendSuccess(response, "Break already started recently", recentBreak, 200);
+    }
+
     const breakSession = await prisma.breakSession.create({
       data: { attendanceId: attendance.id, employeeId, startTime: new Date() },
     });
@@ -512,6 +535,8 @@ router.post("/break/start", async (request, response, next) => {
     return sendSuccess(response, "Break started", breakSession, 201);
   } catch (error) {
     next(error);
+  } finally {
+    activeBreakOperations.delete(employeeId);
   }
 });
 
@@ -1868,13 +1893,18 @@ router.post(
   "/desktop-event",
   validate(desktopEventSchema),
   async (request, response, next) => {
+    const employeeId = request.user?.employeeId;
+
+    if (!employeeId) {
+      throw new AppError("Employee profile not found for this user context", 404);
+    }
+
+    if (activeDesktopEventOperations.has(employeeId)) {
+      return next(new AppError("A desktop event is already being processed. Please wait.", 429));
+    }
+    activeDesktopEventOperations.add(employeeId);
+
     try {
-      const employeeId = request.user?.employeeId;
-
-      if (!employeeId) {
-        throw new AppError("Employee profile not found for this user context", 404);
-      }
-
       const eventType = request.body.eventType || request.body.EventType;
       const timestamp = request.body.timestamp || request.body.Timestamp;
 
@@ -1883,6 +1913,23 @@ router.post(
       }
 
       const parsedTime = new Date(timestamp);
+
+      // Check for duplicate desktop activity log to prevent multiple database logs or redundant break triggers
+      const existingLog = await prisma.desktopActivityLog.findFirst({
+        where: {
+          employeeId,
+          eventType,
+          timestamp: parsedTime,
+        },
+      });
+
+      if (existingLog) {
+        return sendSuccess(response, "Desktop event already logged", {
+          logged: false,
+          alreadyLogged: true,
+          attendanceActive: true,
+        });
+      }
 
       // 1. Log the desktop event
       await prisma.desktopActivityLog.create({
@@ -1975,6 +2022,8 @@ router.post(
       });
     } catch (error) {
       next(error);
+    } finally {
+      activeDesktopEventOperations.delete(employeeId);
     }
   }
 );
@@ -2012,7 +2061,15 @@ router.get(
         orderBy: { timestamp: "asc" },
       });
 
-      return sendSuccess(response, "Desktop activity logs fetched successfully", { events });
+      const employee = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { lastDesktopActive: true },
+      });
+
+      return sendSuccess(response, "Desktop activity logs fetched successfully", { 
+        events, 
+        lastDesktopActive: employee?.lastDesktopActive ?? null 
+      });
     } catch (error) {
       next(error);
     }
