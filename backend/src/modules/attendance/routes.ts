@@ -538,101 +538,125 @@ router.post("/break/end", async (request, response, next) => {
     const endTime = new Date();
     const durationMinutes = Math.floor((endTime.getTime() - openBreak.startTime.getTime()) / 60000);
 
-    // Classify break based on start time in Asia/Kolkata timezone
-    const bStart = toZonedTime(openBreak.startTime, TIMEZONE);
-    const startHour = bStart.getHours();
-    const startMin = bStart.getMinutes();
-    const totalStartMins = startHour * 60 + startMin;
-
-    let breakLabel = "Break";
-    let allowedDuration = 0;
-
-    // Fetch the employee's shift config
     const employee = await prisma.employee.findUnique({
       where: { id: employeeId },
       include: { shift: true },
     });
+
     const shift = employee?.shift;
     const hasBreaks = shift ? shift.hasBreaks : true;
 
-    // A shift is a morning shift if its start hour is before 12:00 PM (defaulting to true for standard/null shift)
     const shiftStartTime = shift?.startTime || "09:00";
     const shiftStartHour = parseInt(shiftStartTime.split(":")[0], 10);
     const isMorningShift = !isNaN(shiftStartHour) && shiftStartHour < 12;
 
-    // Helper to parse "HH:MM" time string into minutes-from-midnight
     const parseTimeToMinutes = (timeStr: string): number => {
-      const [hours, minutes] = timeStr.split(":").map(Number);
-      return (isNaN(hours) || isNaN(minutes)) ? 0 : hours * 60 + minutes;
+      const [h, m] = (timeStr || "").split(":").map(Number);
+      return (isNaN(h) || isNaN(m)) ? 0 : h * 60 + m;
     };
 
-    // Dynamically retrieve break windows from the shift profile (with defaults)
-    const morningTeaStartMins = parseTimeToMinutes(shift?.morningTeaStart || "10:30");
-    const morningTeaEndMins = parseTimeToMinutes(shift?.morningTeaEnd || "11:15");
-    const lunchStartMins = parseTimeToMinutes(shift?.lunchStart || "12:00");
-    const lunchEndMins = parseTimeToMinutes(shift?.lunchEnd || "14:30");
-    const eveningTeaStartMins = parseTimeToMinutes(shift?.eveningTeaStart || "15:30");
-    const eveningTeaEndMins = parseTimeToMinutes(shift?.eveningTeaEnd || "17:00");
-    const dinnerStartMins = parseTimeToMinutes(shift?.dinnerStart || "20:00");
-    const dinnerEndMins = parseTimeToMinutes(shift?.dinnerEnd || "22:00");
+    // ── Quota-Based Flexible Break Windows ───────────────────────────────────
+    // Wide windows allow breaks taken slightly early or late to be classified
+    // as the official break. The quota defines penalty-free minutes.
+    //   Morning Tea  : 09:30 – 12:00  (quota 15 min, min qualifying 10 min)
+    //   Lunch        : 12:00 – 15:00  (quota 40 min, min qualifying 20 min)
+    //   Evening Tea  : 15:00 – 18:00  (quota 20 min, min qualifying 10 min)
+    //   Dinner       : 19:00 – 23:00  (quota 40 min, min qualifying 20 min)
+    // ─────────────────────────────────────────────────────────────────────────
+    const windowDefs = [
+      {
+        label: "Morning Tea Break",
+        windowStart: parseTimeToMinutes("09:30"),
+        windowEnd:   parseTimeToMinutes("12:00"),
+        quota:       (shift ? shift.allowMorningTea : true) ? 15 : 0,
+        minToQualify: 10,
+      },
+      {
+        label: "Lunch",
+        windowStart: parseTimeToMinutes("12:00"),
+        windowEnd:   parseTimeToMinutes("15:00"),
+        quota:       (isMorningShift && (shift ? shift.allowLunch : true)) ? 40 : 0,
+        minToQualify: 20,
+      },
+      {
+        label: "Evening Tea Break",
+        windowStart: parseTimeToMinutes("15:00"),
+        windowEnd:   parseTimeToMinutes("18:00"),
+        quota:       (shift ? shift.allowEveningTea : true) ? 20 : 0,
+        minToQualify: 10,
+      },
+      {
+        label: "Dinner Break",
+        windowStart: parseTimeToMinutes("19:00"),
+        windowEnd:   parseTimeToMinutes("23:00"),
+        quota:       (!isMorningShift && (shift ? shift.allowDinner : true)) ? 40 : 0,
+        minToQualify: 20,
+      },
+    ];
 
-    if (hasBreaks) {
-      // Morning Tea Break window
-      if (totalStartMins >= morningTeaStartMins && totalStartMins <= morningTeaEndMins) {
-        breakLabel = "Morning Tea Break";
-        allowedDuration = (shift ? shift.allowMorningTea : true) ? 15 : 0;
+    // Classify the current break's start time
+    const bStart = toZonedTime(openBreak.startTime, TIMEZONE);
+    const totalStartMins = bStart.getHours() * 60 + bStart.getMinutes();
+
+    // Find which wide window this break falls in
+    const matchedWindow = hasBreaks
+      ? windowDefs.find(w => totalStartMins >= w.windowStart && totalStartMins < w.windowEnd)
+      : undefined;
+
+    let breakLabel = "Break";
+    let allowedDuration = 0;
+    let isOfficialBreak = false;
+
+    if (matchedWindow && matchedWindow.quota > 0) {
+      breakLabel = matchedWindow.label;
+
+      // Fetch all completed breaks for today to check quota exhaustion
+      const completedBreaksToday = await prisma.breakSession.findMany({
+        where: {
+          attendanceId: attendance.id,
+          endTime: { not: null },
+          id: { not: openBreak.id },
+        },
+        orderBy: { startTime: "asc" },
+      });
+
+      // Check if an official break in this window was already recorded today
+      const alreadyHasOfficialBreak = completedBreaksToday.some(b => {
+        const bStartZoned = toZonedTime(b.startTime, TIMEZONE);
+        const bMins = bStartZoned.getHours() * 60 + bStartZoned.getMinutes();
+        return (
+          bMins >= matchedWindow.windowStart &&
+          bMins < matchedWindow.windowEnd &&
+          (b.durationMinutes ?? 0) >= matchedWindow.minToQualify
+        );
+      });
+
+      if (alreadyHasOfficialBreak) {
+        // Quota exhausted — treat as raw away time (no penalty minutes added;
+        // the break duration is already subtracted from worked mins at checkout)
+        allowedDuration = 0;
+        isOfficialBreak = false;
+      } else if (durationMinutes >= matchedWindow.minToQualify) {
+        // Meets minimum — this is the official break
+        allowedDuration = matchedWindow.quota;
+        isOfficialBreak = true;
+      } else {
+        // Below minimum duration — not an official break
+        allowedDuration = 0;
+        isOfficialBreak = false;
       }
-      // Lunch window
-      else if (totalStartMins >= lunchStartMins && totalStartMins <= lunchEndMins) {
-        breakLabel = "Lunch";
-        // ONLY allowed for morning shifts
-        allowedDuration = (isMorningShift && (shift ? shift.allowLunch : true)) ? 40 : 0;
-      }
-      // Evening Tea Break window
-      else if (totalStartMins >= eveningTeaStartMins && totalStartMins <= eveningTeaEndMins) {
-        breakLabel = "Evening Tea Break";
-        allowedDuration = (shift ? shift.allowEveningTea : true) ? 20 : 0;
-      }
-      // Dinner Break window
-      else if (totalStartMins >= dinnerStartMins && totalStartMins <= dinnerEndMins) {
-        breakLabel = "Dinner Break";
-        // ONLY allowed for night shifts
-        allowedDuration = (!isMorningShift && (shift ? shift.allowDinner : true)) ? 40 : 0;
-      }
-    } else {
-      allowedDuration = 0;
     }
 
-    let penaltyPoints = 0;
+    // ── Penalty Calculation ───────────────────────────────────────────────────
+    // Official break overspend: exact 1-to-1 penalty minutes, no points, no half-day.
+    // Raw away (non-official): already deducted from workedMinutes at checkout.
+    // ─────────────────────────────────────────────────────────────────────────
     let penaltyMinutes = 0;
-    let isHalfDayPenalty = false;
     let lateByMinutes = 0;
 
-    if (allowedDuration > 0 && durationMinutes > allowedDuration) {
+    if (isOfficialBreak && durationMinutes > allowedDuration) {
       lateByMinutes = durationMinutes - allowedDuration;
-
-      if (lateByMinutes >= 60) {
-        isHalfDayPenalty = true;
-        const additionalHours = Math.floor((lateByMinutes - 60) / 60);
-        penaltyPoints = 10 + (additionalHours * 10);
-        penaltyPoints = Math.min(penaltyPoints, 40); // Cap at 40 points max
-        penaltyMinutes = 0;
-      } else if (lateByMinutes >= 30) {
-        penaltyPoints = 10;
-        penaltyMinutes = 60;
-      } else if (lateByMinutes >= 15) {
-        penaltyPoints = 5;
-        penaltyMinutes = 45;
-      } else if (lateByMinutes >= 10) {
-        penaltyPoints = 2;
-        penaltyMinutes = 30;
-      } else if (lateByMinutes >= 6) {
-        penaltyPoints = 1;
-        penaltyMinutes = 20;
-      } else if (lateByMinutes > 0) {
-        penaltyPoints = 1;
-        penaltyMinutes = 0;
-      }
+      penaltyMinutes = lateByMinutes; // 1-to-1 exact penalty
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -642,37 +666,12 @@ router.post("/break/end", async (request, response, next) => {
         data: { endTime, durationMinutes },
       });
 
-      // 2. If there's a penalty, apply it
-      if (penaltyPoints > 0) {
-        const emp = await tx.employee.findUnique({
-          where: { id: employeeId },
-          select: { points: true }
-        });
-        if (emp) {
-          await tx.employee.update({
-            where: { id: employeeId },
-            data: { points: emp.points - penaltyPoints },
-          });
-        }
-
-        // Log history
-        await tx.pointHistory.create({
-          data: {
-            employeeId,
-            amount: penaltyPoints,
-            reason: `Late return from ${breakLabel} by ${lateByMinutes} minutes`,
-            mode: "subtract",
-          },
-        });
-      }
-
-      // 3. Accumulate penaltyMinutes and check HALF_DAY status
-      if (penaltyMinutes > 0 || isHalfDayPenalty) {
+      // 2. Accumulate penaltyMinutes (no points deduction for break overspend)
+      if (penaltyMinutes > 0) {
         await tx.attendance.update({
           where: { id: attendance.id },
           data: {
             penaltyMinutes: (attendance.penaltyMinutes ?? 0) + penaltyMinutes,
-            ...(isHalfDayPenalty ? { status: AttendanceStatus.HALF_DAY } : {}),
           },
         });
       }
@@ -680,29 +679,15 @@ router.post("/break/end", async (request, response, next) => {
       return bs;
     });
 
-    // 4. Send notification if points were deducted (outside transaction to avoid blocking)
-    if (penaltyPoints > 0) {
-      try {
-        const currentEmployee = await prisma.employee.findUnique({
-          where: { id: employeeId },
-          select: { userId: true },
-        });
-        if (currentEmployee) {
-          const { createNotification } = await import("../notifications/service.js");
-          await createNotification({
-            userId: currentEmployee.userId,
-            title: "Points Deducted",
-            message: `${penaltyPoints} points were deducted. Reason: Late return from ${breakLabel} by ${lateByMinutes} minutes`,
-            type: "POINTS_UPDATE",
-            link: "/team/leaderboard",
-          });
-        }
-      } catch (err) {
-        console.error("Failed to send break penalty notification:", err);
-      }
-    }
-
-    return sendSuccess(response, "Break ended", updated);
+    return sendSuccess(response, "Break ended", {
+      ...updated,
+      breakLabel,
+      isOfficialBreak,
+      allowedDuration,
+      durationMinutes,
+      penaltyMinutes,
+      lateByMinutes,
+    });
   } catch (error) {
     next(error);
   }

@@ -36,29 +36,42 @@ function format12h(timeStr: string): string {
 
 interface ScheduledBreak {
   isBreak: boolean;
-  type: "Morning Tea Break" | "Lunch Break" | "Evening Tea Break" | null;
+  type: "Morning Tea Break" | "Lunch Break" | "Evening Tea Break" | "Dinner Break" | null;
 }
+
+// Wide flexible break windows — matches the backend Quota-Based classification.
+// Morning Tea : 09:30 – 12:00  (min 10 min to qualify)
+// Lunch       : 12:00 – 15:00  (min 20 min to qualify)
+// Evening Tea : 15:00 – 18:00  (min 10 min to qualify)
+// Dinner      : 19:00 – 23:00  (min 20 min to qualify)
+const BREAK_MIN_QUALIFY: Record<string, number> = {
+  'Morning Tea Break': 10,
+  'Lunch Break': 20,
+  'Evening Tea Break': 10,
+  'Dinner Break': 20,
+};
 
 const getScheduledBreakInfo = (dateInput: Date | string): ScheduledBreak => {
   const date = toZonedTime(new Date(dateInput), 'Asia/Kolkata');
-  const hour = date.getHours();
-  const minute = date.getMinutes();
-  
-  // Morning Tea Break: 10:45 AM - 11:00 AM (flexible: 10:40 AM to 11:15 AM)
-  if ((hour === 10 && minute >= 40) || (hour === 11 && minute <= 15)) {
-    return { isBreak: true, type: "Morning Tea Break" };
+  const totalMins = date.getHours() * 60 + date.getMinutes();
+
+  // Morning Tea: 9:30 AM – 12:00 PM
+  if (totalMins >= 9 * 60 + 30 && totalMins < 12 * 60) {
+    return { isBreak: true, type: 'Morning Tea Break' };
   }
-  
-  // Lunch Break: 1:00 PM - 1:40 PM (flexible: 12:55 PM to 2:15 PM)
-  if ((hour === 12 && minute >= 55) || hour === 13 || (hour === 14 && minute <= 15)) {
-    return { isBreak: true, type: "Lunch Break" };
+  // Lunch: 12:00 PM – 3:00 PM
+  if (totalMins >= 12 * 60 && totalMins < 15 * 60) {
+    return { isBreak: true, type: 'Lunch Break' };
   }
-  
-  // Evening Tea Break: 4:10 PM - 4:30 PM (flexible: 4:00 PM to 4:45 PM)
-  if (hour === 16 && minute >= 0 && minute <= 45) {
-    return { isBreak: true, type: "Evening Tea Break" };
+  // Evening Tea: 3:00 PM – 6:00 PM
+  if (totalMins >= 15 * 60 && totalMins < 18 * 60) {
+    return { isBreak: true, type: 'Evening Tea Break' };
   }
-  
+  // Dinner: 7:00 PM – 11:00 PM
+  if (totalMins >= 19 * 60 && totalMins < 23 * 60) {
+    return { isBreak: true, type: 'Dinner Break' };
+  }
+
   return { isBreak: false, type: null };
 };
 
@@ -270,36 +283,64 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
     return () => clearInterval(iv);
   }, [startTime, endTime, lateThreshold, checkInTime, checkOutTime, workedMinutes, dateContext, desktopLogs, breakSessions]);
 
-  const breakSessionsMapped = breakSessions.map(s => {
-    const baseDate = dateContext ? new Date(dateContext + 'T00:00:00') : new Date();
-    const isDateToday = dateContext ? isToday(dateContext) : true;
-    const now = isDateToday ? new Date() : new Date(dateContext + 'T23:59:59');
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
-    const shiftStart = new Date(baseDate); shiftStart.setHours(startH, startM, 0, 0);
-    const shiftEnd = new Date(baseDate); shiftEnd.setHours(endH, endM, 0, 0);
-    const totalMs = shiftEnd.getTime() - shiftStart.getTime();
+  const breakSessionsMapped = useMemo(() => {
+    // Group breaks by window type to enforce quota (only first qualifying break
+    // per window is official; the rest are raw away segments).
+    const officialWindowsSeen = new Set<string>();
 
-    const bStart = toZonedTime(new Date(s.startTime), 'Asia/Kolkata');
-    const bStartToday = new Date(baseDate);
-    bStartToday.setHours(bStart.getHours(), bStart.getMinutes(), bStart.getSeconds(), 0);
+    return breakSessions.map(s => {
+      const baseDate = dateContext ? new Date(dateContext + 'T00:00:00') : new Date();
+      const isDateToday = dateContext ? isToday(dateContext) : true;
+      const now = isDateToday ? new Date() : new Date(dateContext + 'T23:59:59');
+      const [startH, startM] = startTime.split(':').map(Number);
+      const [endH, endM] = endTime.split(':').map(Number);
+      const shiftStart = new Date(baseDate); shiftStart.setHours(startH, startM, 0, 0);
+      const shiftEnd = new Date(baseDate); shiftEnd.setHours(endH, endM, 0, 0);
+      const totalMs = shiftEnd.getTime() - shiftStart.getTime();
 
-    const bEndZoned = toZonedTime(new Date(s.endTime || now), 'Asia/Kolkata');
-    const bEndToday = new Date(baseDate);
-    bEndToday.setHours(bEndZoned.getHours(), bEndZoned.getMinutes(), bEndZoned.getSeconds(), 0);
+      const bStart = toZonedTime(new Date(s.startTime), 'Asia/Kolkata');
+      const bStartToday = new Date(baseDate);
+      bStartToday.setHours(bStart.getHours(), bStart.getMinutes(), bStart.getSeconds(), 0);
 
-    const startPct = Math.max(0, Math.min(100, ((bStartToday.getTime() - shiftStart.getTime()) / totalMs) * 100));
-    const endPct = Math.max(0, Math.min(100, ((bEndToday.getTime() - shiftStart.getTime()) / totalMs) * 100));
+      const bEndZoned = toZonedTime(new Date(s.endTime || now), 'Asia/Kolkata');
+      const bEndToday = new Date(baseDate);
+      bEndToday.setHours(bEndZoned.getHours(), bEndZoned.getMinutes(), bEndZoned.getSeconds(), 0);
 
-    return {
-      id: s.id,
-      startPct,
-      endPct,
-      isOpen: !s.endTime,
-      startTimeLabel: formatAttendanceTime(s.startTime),
-      endTimeLabel: s.endTime ? formatAttendanceTime(s.endTime) : 'Ongoing'
-    };
-  });
+      const startPct = Math.max(0, Math.min(100, ((bStartToday.getTime() - shiftStart.getTime()) / totalMs) * 100));
+      const endPct = Math.max(0, Math.min(100, ((bEndToday.getTime() - shiftStart.getTime()) / totalMs) * 100));
+
+      const durationMins = s.endTime
+        ? Math.floor((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000)
+        : null;
+
+      // Determine if this is an official scheduled break
+      const breakInfo = getScheduledBreakInfo(bStart);
+      const minToQualify = breakInfo.type ? (BREAK_MIN_QUALIFY[breakInfo.type] ?? 0) : 0;
+      const isManual = !desktopLogs.some(l =>
+        Math.abs(new Date(l.timestamp).getTime() - bStart.getTime()) < 60000
+      );
+      const meetsMinDuration = isManual || durationMins === null || durationMins >= minToQualify;
+      const windowKey = breakInfo.type ?? '';
+      let isOfficialBreak = false;
+
+      if (breakInfo.isBreak && meetsMinDuration && windowKey) {
+        if (!officialWindowsSeen.has(windowKey)) {
+          officialWindowsSeen.add(windowKey);
+          isOfficialBreak = true;
+        }
+      }
+
+      return {
+        id: s.id,
+        startPct,
+        endPct,
+        isOpen: !s.endTime,
+        isOfficialBreak,
+        startTimeLabel: formatAttendanceTime(s.startTime),
+        endTimeLabel: s.endTime ? formatAttendanceTime(s.endTime) : 'Ongoing'
+      };
+    });
+  }, [breakSessions, desktopLogs, startTime, endTime, dateContext]);
 
   const scheduledBreakPcts = useMemo(() => {
     const [startH, startM] = startTime.split(':').map(Number);
@@ -388,7 +429,31 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
         }
     }
 
-    return segments;
+    // Post-process segments: convert any idle segment under 10 minutes (600,000ms) to active
+    const processedSegments = segments.map(seg => {
+      if (seg.type === 'idle' && seg.durationMs < 600000) {
+        return { ...seg, type: 'active' as const };
+      }
+      return seg;
+    });
+
+    // Merge consecutive segments of the same type
+    const mergedSegments: typeof processedSegments = [];
+    for (const seg of processedSegments) {
+      if (mergedSegments.length === 0) {
+        mergedSegments.push(seg);
+      } else {
+        const last = mergedSegments[mergedSegments.length - 1];
+        if (last.type === seg.type) {
+          last.endPct = seg.endPct;
+          last.durationMs += seg.durationMs;
+        } else {
+          mergedSegments.push(seg);
+        }
+      }
+    }
+
+    return mergedSegments;
   }, [desktopLogs, startTime, endTime, dateContext, checkInTime, checkOutTime]);
 
   const combinedLogItems = useMemo(() => {
@@ -419,8 +484,49 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
       });
     }
 
+    const isDateToday = dateContext ? isToday(dateContext) : true;
+    const baseDate = dateContext ? new Date(dateContext + 'T00:00:00') : new Date();
+
+    // Helper to determine if an IDLE event is under 10 minutes and should be filtered out
+    const shouldFilterIdleLog = (log: typeof desktopLogs[0], index: number) => {
+      if (log.eventType === 'IDLE_START') {
+        let endTimeVal = isDateToday ? new Date() : new Date(baseDate);
+        if (!isDateToday) {
+          endTimeVal.setHours(23, 59, 59, 999);
+        }
+        for (let j = index + 1; j < desktopLogs.length; j++) {
+          const nextLog = desktopLogs[j];
+          if (
+            nextLog.eventType === 'IDLE_END' ||
+            nextLog.eventType === 'UNLOCK' ||
+            nextLog.eventType === 'WAKE' ||
+            nextLog.eventType === 'LOCK' ||
+            nextLog.eventType === 'SLEEP'
+          ) {
+            endTimeVal = new Date(nextLog.timestamp);
+            break;
+          }
+        }
+        const durationMs = endTimeVal.getTime() - new Date(log.timestamp).getTime();
+        return durationMs < 600000;
+      }
+      if (log.eventType === 'IDLE_END') {
+        let startTimeVal = new Date(log.timestamp);
+        for (let j = index - 1; j >= 0; j--) {
+          const prevLog = desktopLogs[j];
+          if (prevLog.eventType === 'IDLE_START') {
+            startTimeVal = new Date(prevLog.timestamp);
+            break;
+          }
+        }
+        const durationMs = new Date(log.timestamp).getTime() - startTimeVal.getTime();
+        return durationMs < 600000;
+      }
+      return false;
+    };
+
     // 3. Desktop Activity Logs
-    desktopLogs.forEach((log) => {
+    desktopLogs.forEach((log, index) => {
       const isLock = log.eventType === 'LOCK' || log.eventType === 'SLEEP';
       const isUnlock = log.eventType === 'UNLOCK' || log.eventType === 'WAKE';
       const isIdleStart = log.eventType === 'IDLE_START';
@@ -428,6 +534,11 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
       
       const logTime = new Date(log.timestamp);
       
+      // Filter out idle events under 10 minutes
+      if ((isIdleStart || isIdleEnd) && shouldFilterIdleLog(log, index)) {
+        return;
+      }
+
       // If this desktop activity corresponds to an active scheduled break session (within 60s),
       // we hide it to prevent duplicate logs. If it falls outside scheduled break hours, we
       // keep the raw desktop event because it is more informative ("Screen Locked", "Went Idle", etc.).
@@ -742,7 +853,7 @@ const WorkdayTimeline: React.FC<WorkdayTimelineProps> = ({
                 {breakSessionsMapped.map((seg) => (
                   <div
                     key={seg.id}
-                    className={`wdt-break-block ${seg.isOpen ? 'is-active' : ''}`}
+                    className={`wdt-break-block${seg.isOfficialBreak ? '' : ' wdt-break-block--away'}${seg.isOpen ? ' is-active' : ''}`}
                     style={{
                       left: `${seg.startPct}%`,
                       width: `${Math.max(1, seg.endPct - seg.startPct)}%`,

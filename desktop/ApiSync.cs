@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HRMS_Agent
@@ -21,6 +23,8 @@ namespace HRMS_Agent
         public string Token { get; set; } = string.Empty;
         public string UserEmail { get; set; } = string.Empty;
         public string UserName { get; set; } = string.Empty;
+        // Encrypted using Windows DPAPI — never stored in plain text
+        public string EncryptedPassword { get; set; } = string.Empty;
     }
 
     public class AttendanceRecord
@@ -131,6 +135,42 @@ namespace HRMS_Agent
         public static string CurrentEmail => _config.UserEmail;
         public static string CurrentName => _config.UserName;
         public static string ApiUrl => _config.ApiUrl;
+        // True if the device has ever been configured (email stored), even if token expired
+        public static bool HasStoredCredentials => !string.IsNullOrEmpty(_config.UserEmail) && !string.IsNullOrEmpty(_config.EncryptedPassword);
+
+        // Encrypt/decrypt password using Windows DPAPI (machine + user scope)
+        private static string EncryptPassword(string plainText)
+        {
+            try
+            {
+                var bytes = Encoding.UTF8.GetBytes(plainText);
+                var encrypted = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
+                return Convert.ToBase64String(encrypted);
+            }
+            catch { return string.Empty; }
+        }
+
+        private static string DecryptPassword(string encrypted)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(encrypted)) return string.Empty;
+                var bytes = Convert.FromBase64String(encrypted);
+                var decrypted = ProtectedData.Unprotect(bytes, null, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(decrypted);
+            }
+            catch { return string.Empty; }
+        }
+
+        // Silently re-authenticate using stored credentials. Returns true if token refreshed.
+        public static async Task<bool> TryRefreshTokenAsync()
+        {
+            if (string.IsNullOrEmpty(_config.UserEmail) || string.IsNullOrEmpty(_config.EncryptedPassword))
+                return false;
+            var password = DecryptPassword(_config.EncryptedPassword);
+            if (string.IsNullOrEmpty(password)) return false;
+            return await LoginAsync(_config.UserEmail, password);
+        }
 
         public static void SetApiUrl(string url)
         {
@@ -232,6 +272,8 @@ namespace HRMS_Agent
                     {
                         _config.Token = tokenProp.GetString() ?? string.Empty;
                         _config.UserEmail = email;
+                        // Store encrypted password for silent re-authentication
+                        _config.EncryptedPassword = EncryptPassword(password);
                         
                         string fullName = "";
                         if (dataProp.TryGetProperty("user", out var userProp))
@@ -409,10 +451,23 @@ namespace HRMS_Agent
             if (!IsLoggedIn) return null;
             try
             {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
                 using var request = new HttpRequestMessage(HttpMethod.Get, $"{_config.ApiUrl}/api/attendance/today");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _config.Token);
-                
-                var response = await _httpClient.SendAsync(request);
+
+                var response = await _httpClient.SendAsync(request, cts.Token);
+
+                // Token expired — attempt silent re-authentication
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    if (await TryRefreshTokenAsync())
+                    {
+                        using var retryReq = new HttpRequestMessage(HttpMethod.Get, $"{_config.ApiUrl}/api/attendance/today");
+                        retryReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _config.Token);
+                        response = await _httpClient.SendAsync(retryReq, cts.Token);
+                    }
+                }
+
                 if (!response.IsSuccessStatusCode) return null;
 
                 var json = await response.Content.ReadAsStringAsync();
@@ -461,12 +516,31 @@ namespace HRMS_Agent
             if (!IsLoggedIn) return false;
             try
             {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 using var request = new HttpRequestMessage(HttpMethod.Post, $"{_config.ApiUrl}/api/attendance/check-in");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _config.Token);
                 request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 
-                var response = await _httpClient.SendAsync(request);
+                var response = await _httpClient.SendAsync(request, cts.Token);
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    if (await TryRefreshTokenAsync())
+                    {
+                        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _config.Token);
+                        using var retryReq = new HttpRequestMessage(HttpMethod.Post, $"{_config.ApiUrl}/api/attendance/check-in");
+                        retryReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _config.Token);
+                        retryReq.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+                        var retryResp = await _httpClient.SendAsync(retryReq, cts.Token);
+                        return retryResp.IsSuccessStatusCode;
+                    }
+                    return false;
+                }
                 return response.IsSuccessStatusCode;
+            }
+            catch (OperationCanceledException)
+            {
+                OnStatusChanged?.Invoke("Check-in timed out");
+                return false;
             }
             catch (Exception ex)
             {
@@ -480,14 +554,32 @@ namespace HRMS_Agent
             if (!IsLoggedIn) return false;
             try
             {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 using var request = new HttpRequestMessage(HttpMethod.Post, $"{_config.ApiUrl}/api/attendance/check-out");
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _config.Token);
-                
+
                 var payload = new { todaysUpdate = statusUpdate };
                 request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-                var response = await _httpClient.SendAsync(request);
+                var response = await _httpClient.SendAsync(request, cts.Token);
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    if (await TryRefreshTokenAsync())
+                    {
+                        using var retryReq = new HttpRequestMessage(HttpMethod.Post, $"{_config.ApiUrl}/api/attendance/check-out");
+                        retryReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _config.Token);
+                        retryReq.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                        var retryResp = await _httpClient.SendAsync(retryReq, cts.Token);
+                        return retryResp.IsSuccessStatusCode;
+                    }
+                    return false;
+                }
                 return response.IsSuccessStatusCode;
+            }
+            catch (OperationCanceledException)
+            {
+                OnStatusChanged?.Invoke("Check-out timed out after 30 seconds");
+                return false;
             }
             catch (Exception ex)
             {

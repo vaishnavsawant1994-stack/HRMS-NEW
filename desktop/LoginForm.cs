@@ -22,7 +22,7 @@ namespace HRMS_Agent
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Color.FromArgb(245, 246, 250);
-            Icon = SystemIcons.Shield;
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Shield;
 
             var titleLabel = new Label
             {

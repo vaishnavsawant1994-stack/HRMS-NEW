@@ -299,5 +299,19 @@
     "title": "Filter live-status activity logs query to the current date",
     "status": "COMPLETED",
     "narrative": "Resolved a bug where employees who haven't sent desktop events today were showing old offline-synced sleep/lock times from previous days (e.g. June 26th) in their live status metadata and being incorrectly marked as AWAY. Refactored the GET /api/attendance/live-status endpoint in routes.ts to filter desktopActivityLogs selection to only include events occurring greater than or equal to the start of today."
+  },
+  {
+    "date": "2026-07-02",
+    "taskId": "TSK-ATT-027",
+    "title": "Align desktop agent activity log and break naming logic with web dashboard",
+    "status": "COMPLETED",
+    "narrative": "Resolved a misalignment between the desktop agent console activity log and the web dashboard workday timeline event log. Refactored DashboardForm.cs to utilize a GetScheduledBreakInfo helper mapping lock/idle break states to specific scheduled name strings (Morning Tea Break, Lunch Break, Evening Tea Break) only when they fall inside configured break hours or were manually started. Filtered out redundant logs and transient breaks under 1 minute from the desktop list box view."
+  },
+  {
+    "date": "2026-07-02",
+    "taskId": "TSK-ATT-028",
+    "title": "Implement Quota-Based Flexible Breaks, Penalties & Desktop Agent Robustness",
+    "status": "COMPLETED",
+    "narrative": "Refactored the Express backend /break/end API and visual workday timeline components to support wide flexible scheduled break windows (tea and lunch windows spanning up to 3 hours), 10m/20m minimum duration limits, and first-qualifying-break quota check per window. Implemented critical C# desktop client robustness fixes: added CancellationTokens for 30s timeouts to prevent UI freezes on checkout, quoted Application.ExecutablePath in the startup registry key, introduced a 3-attempt data refresh retry loop, used local machine-level DPAPI password storage for silent auto-login, forced tray status updates to refresh the hidden dashboard state, filtered out idle logs < 10 minutes from Event Logs and visual bars, resolved high-DPI layout clipping and maximized control spacing by expanding action widths to 48%, increasing label sizing heights, centering button layout panels dynamically when maximized, and added support for loading custom application branding icon dynamically from the executable's resources."
   }
 ]
