@@ -325,6 +325,12 @@
   animation: wdt-vibrate 0.1s linear infinite;
 }
 
+/* Raw idle/away time — carrot orange, visually distinct from official break amber (#b45309) */
+.wdt-break-block--away {
+  background: #e67e22 !important;
+  opacity: 0.85;
+}
+
 @keyframes wdt-vibrate {
   0% {
     transform: translateY(0);

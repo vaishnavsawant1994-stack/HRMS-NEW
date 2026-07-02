@@ -90,7 +90,7 @@ namespace HRMS_Agent
             BackColor = Color.FromArgb(24, 24, 32); // Modern Dark Slate
             StartPosition = FormStartPosition.CenterScreen;
             Text = "IntelliHrHub Agent Dashboard";
-            Icon = SystemIcons.Shield;
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Shield;
 
             // Apply GDI Rounded Corners
             Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, Width, Height, 16, 16));
@@ -493,7 +493,7 @@ namespace HRMS_Agent
             var contentHeight = formHeight - topY - bottomMargin;
             var availableWidth = formWidth - 20 - 20 - 20; // margins & gap
 
-            var leftWidth = (int)(availableWidth * 0.45);
+            var leftWidth = (int)(availableWidth * 0.48); // Increased from 45% to 48% to give actions and buttons more room
             var rightWidth = availableWidth - leftWidth;
 
             if (_pnlActions != null)
@@ -509,7 +509,7 @@ namespace HRMS_Agent
                 if (_lblStatusText != null)
                 {
                     _lblStatusText.Location = new Point(25, 53);
-                    _lblStatusText.Size = new Size(leftWidth - 50, 35);
+                    _lblStatusText.Size = new Size(leftWidth - 50, 45); // Taller label to support text wrapping / large fonts
                 }
                 if (_lblTimerTitle != null)
                 {
@@ -518,11 +518,12 @@ namespace HRMS_Agent
                 if (_lblTimerText != null)
                 {
                     _lblTimerText.Location = new Point(25, 138);
-                    _lblTimerText.Size = new Size(leftWidth - 50, 35);
+                    _lblTimerText.Size = new Size(leftWidth - 50, 40); // Taller label
                 }
 
                 var btnWidth = (leftWidth - 50 - 15) / 2;
-                var buttonY1 = Math.Max(210, contentHeight - 170);
+                // Avoid pushing buttons all the way to the bottom when maximized (keep layout cohesive)
+                var buttonY1 = (WindowState == FormWindowState.Maximized) ? 230 : Math.Max(210, contentHeight - 170);
                 var buttonY2 = buttonY1 + 65;
 
                 if (_btnCheckIn != null)
@@ -568,7 +569,9 @@ namespace HRMS_Agent
             if (_lblAccount != null)
             {
                 _lblAccount.Location = new Point(20, formHeight - 50);
-                _lblAccount.Size = new Size(Math.Max(150, formWidth / 2), 30);
+                // Dynamically size account label to avoid truncation, bounding it by sync button location
+                var rightBound = (_btnSync != null) ? _btnSync.Left : formWidth / 2;
+                _lblAccount.Size = new Size(Math.Max(150, rightBound - 30), 30);
             }
 
             if (_btnDisconnect != null)
@@ -762,8 +765,102 @@ namespace HRMS_Agent
                         });
                     }
 
+                    // Filter out short idle logs (< 10 minutes) from Event Log
+                    var filteredLogs = new List<DesktopEventRecord>();
+                    if (logs != null)
+                    {
+                        for (int i = 0; i < logs.Count; i++)
+                        {
+                            var log = logs[i];
+                            if (log.EventType == "IDLE_START")
+                            {
+                                DateTimeOffset.TryParse(log.Timestamp, out var logOffset);
+                                var startD = logOffset.LocalDateTime;
+                                var endD = DateTime.Now;
+                                for (int j = i + 1; j < logs.Count; j++)
+                                {
+                                    var nextLog = logs[j];
+                                    if (nextLog.EventType == "IDLE_END" || nextLog.EventType == "LOCK" || nextLog.EventType == "SLEEP" || nextLog.EventType == "UNLOCK" || nextLog.EventType == "WAKE" || nextLog.EventType == "SHUTDOWN")
+                                    {
+                                        DateTimeOffset.TryParse(nextLog.Timestamp, out var nextOffset);
+                                        endD = nextOffset.LocalDateTime;
+                                        break;
+                                    }
+                                }
+                                if ((endD - startD).TotalMinutes < 10)
+                                {
+                                    continue;
+                                }
+                            }
+                            else if (log.EventType == "IDLE_END")
+                            {
+                                DateTimeOffset.TryParse(log.Timestamp, out var logOffset);
+                                var endD = logOffset.LocalDateTime;
+                                var startD = endD;
+                                for (int j = i - 1; j >= 0; j--)
+                                {
+                                    var prevLog = logs[j];
+                                    if (prevLog.EventType == "IDLE_START")
+                                    {
+                                        DateTimeOffset.TryParse(prevLog.Timestamp, out var prevOffset);
+                                        startD = prevOffset.LocalDateTime;
+                                        break;
+                                    }
+                                }
+                                if ((endD - startD).TotalMinutes < 10)
+                                {
+                                    continue;
+                                }
+                            }
+                            filteredLogs.Add(log);
+                        }
+                    }
+
+                    // Determine which breaks are official scheduled breaks today
+                    var officialWindowsSeen = new HashSet<string>();
+                    var officialBreaks = new HashSet<int>();
+
+                    foreach (var b in breaks)
+                    {
+                        if (!DateTimeOffset.TryParse(b.StartTime, out var startOffset)) continue;
+                        var localStart = startOffset.LocalDateTime;
+                        var breakInfo = GetScheduledBreakInfo(localStart);
+                        if (!breakInfo.IsBreak) continue;
+
+                        int minToQualify = 10;
+                        if (breakInfo.Type == "Lunch Break" || breakInfo.Type == "Dinner Break")
+                        {
+                            minToQualify = 20;
+                        }
+
+                        double durationMins = 0;
+                        if (!string.IsNullOrEmpty(b.EndTime) && DateTimeOffset.TryParse(b.EndTime, out var endOffset))
+                        {
+                            durationMins = (endOffset.LocalDateTime - localStart).TotalMinutes;
+                        }
+                        else
+                        {
+                            durationMins = (DateTime.Now - localStart).TotalMinutes; // ongoing
+                        }
+
+                        bool isManual = !filteredLogs.Exists(log => {
+                            if (DateTimeOffset.TryParse(log.Timestamp, out var logOffset))
+                            {
+                                return Math.Abs((logOffset.LocalDateTime - localStart).TotalSeconds) < 60;
+                            }
+                            return false;
+                        });
+
+                        bool meetsDuration = isManual || durationMins >= minToQualify;
+                        if (meetsDuration && !officialWindowsSeen.Contains(breakInfo.Type))
+                        {
+                            officialWindowsSeen.Add(breakInfo.Type);
+                            officialBreaks.Add(b.Id);
+                        }
+                    }
+
                     // 3. Add Desktop telemetry events
-                    foreach (var log in logs)
+                    foreach (var log in filteredLogs)
                     {
                         if (DateTimeOffset.TryParse(log.Timestamp, out var logOffset))
                         {
@@ -775,7 +872,7 @@ namespace HRMS_Agent
                             {
                                 case "LOCK":
                                     desc = "Screen Locked";
-                                    col = Color.FromArgb(231, 76, 60); // Red
+                                    col = Color.FromArgb(230, 126, 34); // Carrot orange
                                     break;
                                 case "UNLOCK":
                                     desc = "Screen Unlocked";
@@ -783,7 +880,7 @@ namespace HRMS_Agent
                                     break;
                                 case "IDLE_START":
                                     desc = "Went Idle";
-                                    col = Color.FromArgb(230, 126, 34); // Orange
+                                    col = Color.FromArgb(230, 126, 34); // Carrot orange
                                     break;
                                 case "IDLE_END":
                                     desc = "Returned from Idle";
@@ -796,12 +893,32 @@ namespace HRMS_Agent
                                 case "SLEEP":
                                 case "SUSPEND":
                                     desc = "System Sleep";
-                                    col = Color.FromArgb(155, 89, 182); // Purple
+                                    col = Color.FromArgb(230, 126, 34); // Carrot orange
                                     break;
                                 case "SHUTDOWN":
                                     desc = "Shutdown";
                                     col = Color.FromArgb(231, 76, 60); // Red
                                     break;
+                            }
+
+                            // Check if this desktop event matches an OFFICIAL break session
+                            bool matchesBreak = breaks.Exists(b => {
+                                if (officialBreaks.Contains(b.Id) && DateTimeOffset.TryParse(b.StartTime, out var breakOffset))
+                                {
+                                    var breakStart = breakOffset.LocalDateTime;
+                                    var breakEnd = DateTimeOffset.TryParse(b.EndTime, out var endOffset) ? endOffset.LocalDateTime : (DateTime?)null;
+                                    
+                                    bool startDiff = Math.Abs((timestamp - breakStart).TotalSeconds) < 60;
+                                    bool endDiff = breakEnd.HasValue ? Math.Abs((timestamp - breakEnd.Value).TotalSeconds) < 60 : false;
+                                    
+                                    return startDiff || endDiff;
+                                }
+                                return false;
+                            });
+
+                            if (matchesBreak)
+                            {
+                                continue; // Filter out redundant desktop activity for official breaks
                             }
 
                             displayItems.Add(new DisplayEventItem
@@ -819,19 +936,39 @@ namespace HRMS_Agent
                         if (DateTimeOffset.TryParse(b.StartTime, out var startOffset))
                         {
                             var localStart = startOffset.LocalDateTime;
-                            string breakName = "Break";
-                            if (localStart.Hour == 10 || (localStart.Hour == 11 && localStart.Minute <= 15))
-                                breakName = "Morning Tea Break";
-                            else if (localStart.Hour == 12 || localStart.Hour == 13)
-                                breakName = "Lunch Break";
-                            else
-                                breakName = "Evening Tea Break";
+                            var breakInfo = GetScheduledBreakInfo(localStart);
+                            
+                            bool isManual = !filteredLogs.Exists(log => {
+                                if (DateTimeOffset.TryParse(log.Timestamp, out var logOffset))
+                                {
+                                    return Math.Abs((logOffset.LocalDateTime - localStart).TotalSeconds) < 60;
+                                }
+                                return false;
+                            });
+
+                            // Only show official breaks or manually triggered breaks
+                            bool isOfficial = officialBreaks.Contains(b.Id);
+                            if (!isOfficial && !isManual)
+                            {
+                                continue;
+                            }
+
+                            // Filter out transient breaks under 1 minute
+                            if (!string.IsNullOrEmpty(b.EndTime) && DateTimeOffset.TryParse(b.EndTime, out var tempEndOffset))
+                            {
+                                if ((tempEndOffset.LocalDateTime - localStart).TotalMilliseconds < 60000)
+                                {
+                                    continue;
+                                }
+                            }
+
+                            string breakName = breakInfo.Type ?? "Custom Break";
 
                             displayItems.Add(new DisplayEventItem
                             {
                                 Timestamp = localStart,
                                 Description = $"{breakName} Started",
-                                Color = Color.FromArgb(230, 126, 34) // Orange
+                                Color = Color.FromArgb(245, 158, 11) // Amber (Official Break)
                             });
 
                             if (!string.IsNullOrEmpty(b.EndTime) && DateTimeOffset.TryParse(b.EndTime, out var endOffset))
@@ -883,26 +1020,66 @@ namespace HRMS_Agent
                 if (activeBreak != null && DateTimeOffset.TryParse(activeBreak.StartTime, out var startOffset))
                 {
                     var localStart = startOffset.LocalDateTime;
-                    if (localStart.Hour == 10 || (localStart.Hour == 11 && localStart.Minute <= 15))
+                    var breakInfo = GetScheduledBreakInfo(localStart);
+                    
+                    bool isManual = logs == null || !logs.Exists(log => {
+                        if (DateTimeOffset.TryParse(log.Timestamp, out var logOffset))
+                        {
+                            return Math.Abs((logOffset.LocalDateTime - localStart).TotalSeconds) < 60;
+                        }
+                        return false;
+                    });
+
+                    if (breakInfo.IsBreak)
                     {
-                        breakName = "Morning Tea";
-                        _btnTea.Text = "End Tea";
-                        SetButtonState(_btnTea, true, Color.FromArgb(231, 76, 60));
+                        breakName = breakInfo.Type.Replace(" Break", ""); // e.g. "Morning Tea" or "Lunch" or "Evening Tea"
+                        if (breakInfo.Type == "Morning Tea Break")
+                        {
+                            _btnTea.Text = "End Tea";
+                            SetButtonState(_btnTea, true, Color.FromArgb(231, 76, 60));
+                        }
+                        else if (breakInfo.Type == "Lunch Break")
+                        {
+                            _btnLunch.Text = "End Lunch";
+                            SetButtonState(_btnLunch, true, Color.FromArgb(231, 76, 60));
+                        }
+                        else if (breakInfo.Type == "Evening Tea Break")
+                        {
+                            _btnTea.Text = "End Tea";
+                            SetButtonState(_btnTea, true, Color.FromArgb(231, 76, 60));
+                        }
                     }
-                    else if (localStart.Hour == 12 || localStart.Hour == 13) // Replaced Hour 14 (Lunch ends by 2:00 PM)
+                    else if (isManual)
                     {
-                        breakName = "Lunch";
-                        _btnLunch.Text = "End Lunch";
-                        SetButtonState(_btnLunch, true, Color.FromArgb(231, 76, 60));
+                        if (localStart.Hour == 12 || localStart.Hour == 13)
+                        {
+                            breakName = "Lunch";
+                            _btnLunch.Text = "End Lunch";
+                            SetButtonState(_btnLunch, true, Color.FromArgb(231, 76, 60));
+                        }
+                        else
+                        {
+                            breakName = "Tea Break";
+                            _btnTea.Text = "End Tea";
+                            SetButtonState(_btnTea, true, Color.FromArgb(231, 76, 60));
+                        }
                     }
                     else
                     {
-                        breakName = "Evening Tea";
-                        _btnTea.Text = "End Tea";
-                        SetButtonState(_btnTea, true, Color.FromArgb(231, 76, 60));
+                        var lastLog = logs != null && logs.Count > 0 ? logs[logs.Count - 1] : null;
+                        if (lastLog != null && (lastLog.EventType == "LOCK" || lastLog.EventType == "SLEEP" || lastLog.EventType == "SUSPEND"))
+                        {
+                            breakName = "Away (Locked)";
+                        }
+                        else
+                        {
+                            breakName = "Away (Idle)";
+                        }
+                        SetButtonState(_btnLunch, false, Color.FromArgb(9, 132, 227));
+                        SetButtonState(_btnTea, false, Color.FromArgb(9, 132, 227));
                     }
                 }
-                _lblStatusText.Text = $"On {breakName}";
+                _lblStatusText.Text = breakName.StartsWith("Away") ? breakName : $"On {breakName}";
                 _lblStatusText.ForeColor = Color.FromArgb(230, 126, 34); // Orange
             }
             else if (!hasCheckedOut)
@@ -914,8 +1091,8 @@ namespace HRMS_Agent
                 bool tookMorningTea = breaks.Exists(b => {
                     if (DateTimeOffset.TryParse(b.StartTime, out var startOffset))
                     {
-                        var localStart = startOffset.LocalDateTime;
-                        return localStart.Hour == 10 || (localStart.Hour == 11 && localStart.Minute <= 15);
+                        var info = GetScheduledBreakInfo(startOffset.LocalDateTime);
+                        return info.IsBreak && info.Type == "Morning Tea Break";
                     }
                     return false;
                 });
@@ -923,8 +1100,8 @@ namespace HRMS_Agent
                 bool tookLunch = breaks.Exists(b => {
                     if (DateTimeOffset.TryParse(b.StartTime, out var startOffset))
                     {
-                        var localStart = startOffset.LocalDateTime;
-                        return localStart.Hour == 12 || localStart.Hour == 13; // Replaced Hour 14
+                        var info = GetScheduledBreakInfo(startOffset.LocalDateTime);
+                        return info.IsBreak && info.Type == "Lunch Break";
                     }
                     return false;
                 });
@@ -932,8 +1109,8 @@ namespace HRMS_Agent
                 bool tookEveningTea = breaks.Exists(b => {
                     if (DateTimeOffset.TryParse(b.StartTime, out var startOffset))
                     {
-                        var localStart = startOffset.LocalDateTime;
-                        return localStart.Hour == 14 || localStart.Hour == 15 || localStart.Hour == 16 || localStart.Hour == 17; // Added Hour 14 (2:00 PM - 5:59 PM)
+                        var info = GetScheduledBreakInfo(startOffset.LocalDateTime);
+                        return info.IsBreak && info.Type == "Evening Tea Break";
                     }
                     return false;
                 });
@@ -1175,6 +1352,45 @@ namespace HRMS_Agent
             {
                 base.OnFormClosing(e);
             }
+        }
+
+        private struct ScheduledBreakInfo
+        {
+            public bool IsBreak;
+            public string Type;
+        }
+
+        private static ScheduledBreakInfo GetScheduledBreakInfo(DateTime time)
+        {
+            int hour = time.Hour;
+            int minute = time.Minute;
+            int totalMins = hour * 60 + minute;
+
+            // Morning Tea: 9:30 AM – 12:00 PM
+            if (totalMins >= 9 * 60 + 30 && totalMins < 12 * 60)
+            {
+                return new ScheduledBreakInfo { IsBreak = true, Type = "Morning Tea Break" };
+            }
+
+            // Lunch: 12:00 PM – 3:00 PM
+            if (totalMins >= 12 * 60 && totalMins < 15 * 60)
+            {
+                return new ScheduledBreakInfo { IsBreak = true, Type = "Lunch Break" };
+            }
+
+            // Evening Tea: 3:00 PM – 6:00 PM
+            if (totalMins >= 15 * 60 && totalMins < 18 * 60)
+            {
+                return new ScheduledBreakInfo { IsBreak = true, Type = "Evening Tea Break" };
+            }
+
+            // Dinner: 7:00 PM – 11:00 PM
+            if (totalMins >= 19 * 60 && totalMins < 23 * 60)
+            {
+                return new ScheduledBreakInfo { IsBreak = true, Type = "Dinner Break" };
+            }
+
+            return new ScheduledBreakInfo { IsBreak = false, Type = null };
         }
 
         protected override void Dispose(bool disposing)

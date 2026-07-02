@@ -39,7 +39,11 @@ namespace HRMS_Agent
         private readonly System.Windows.Forms.Timer _pollTimer;
         private readonly System.Windows.Forms.Timer _reminderTimer;
 
-        // Daily reminder flags to avoid double-triggering
+        // Daily reminder flags — persisted to disk so app restarts don't re-fire
+        private static readonly string ReminderStatePath = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "IntelliHrHub_Agent", "reminder-state.json");
+
         private DateTime? _lastCheckInReminderDate;
         private DateTime? _lastMorningTeaReminderDate;
         private DateTime? _lastLunchReminderDate;
@@ -60,16 +64,29 @@ namespace HRMS_Agent
             _sessionMonitor = new SessionMonitor();
             _idleTracker = new IdleTracker();
 
-            // Register app in Windows Startup
+            // Register app in Windows Startup — quote path to handle spaces
             try
             {
                 using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
                 if (key != null)
                 {
-                    key.SetValue("IntelliHrHub_Agent", Application.ExecutablePath);
+                    var quotedPath = $"\"{Application.ExecutablePath}\"";
+                    key.SetValue("IntelliHrHub_Agent", quotedPath);
+                    // Verify the write succeeded
+                    var written = key.GetValue("IntelliHrHub_Agent") as string;
+                    if (written != quotedPath)
+                    {
+                        Console.WriteLine("Warning: Startup registry entry could not be verified.");
+                    }
                 }
             }
-            catch { /* Ignore if fails */ }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: Could not register startup entry: {ex.Message}");
+            }
+
+            // Load persisted reminder flags
+            LoadReminderState();
 
             // Set up context menu
             var contextMenu = new ContextMenuStrip();
@@ -89,7 +106,7 @@ namespace HRMS_Agent
             // Set up System Tray Icon
             _trayIcon = new NotifyIcon
             {
-                Icon = SystemIcons.Shield,
+                Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Shield,
                 ContextMenuStrip = contextMenu,
                 Visible = true,
                 Text = "IntelliHrHub Desktop Agent"
@@ -132,28 +149,107 @@ namespace HRMS_Agent
 
             if (!ApiSync.IsLoggedIn)
             {
-                // Execute shortly after application startup is complete
-                System.Windows.Forms.Timer startupTimer = new System.Windows.Forms.Timer { Interval = 100 };
-                startupTimer.Tick += (s, e) =>
+                if (ApiSync.HasStoredCredentials)
                 {
-                    startupTimer.Stop();
-                    startupTimer.Dispose();
-                    ShowLoginForm();
-                };
-                startupTimer.Start();
+                    // Device is configured but token expired — attempt silent re-auth
+                    System.Windows.Forms.Timer startupTimer = new System.Windows.Forms.Timer { Interval = 200 };
+                    startupTimer.Tick += async (s, e) =>
+                    {
+                        startupTimer.Stop();
+                        startupTimer.Dispose();
+                        bool refreshed = await ApiSync.TryRefreshTokenAsync();
+                        if (refreshed)
+                        {
+                            ShowDashboardForm();
+                            _ = StartupDataRetryAsync();
+                        }
+                        else
+                        {
+                            // Silent re-auth failed (password changed?) — show login
+                            ShowLoginForm();
+                        }
+                    };
+                    startupTimer.Start();
+                }
+                else
+                {
+                    // Never configured — show login form
+                    System.Windows.Forms.Timer startupTimer = new System.Windows.Forms.Timer { Interval = 100 };
+                    startupTimer.Tick += (s, e) =>
+                    {
+                        startupTimer.Stop();
+                        startupTimer.Dispose();
+                        ShowLoginForm();
+                    };
+                    startupTimer.Start();
+                }
             }
             else
             {
-                // Show dashboard automatically if already logged in
+                // Already logged in — show dashboard and retry data load if needed
                 System.Windows.Forms.Timer startupTimer = new System.Windows.Forms.Timer { Interval = 200 };
                 startupTimer.Tick += (s, e) =>
                 {
                     startupTimer.Stop();
                     startupTimer.Dispose();
                     ShowDashboardForm();
+                    _ = StartupDataRetryAsync();
                 };
                 startupTimer.Start();
             }
+        }
+
+        // Startup retry loop: if first data fetch returns null, retry up to 3 times
+        private async Task StartupDataRetryAsync()
+        {
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                if (attempt > 0) await Task.Delay(5000);
+                var attendance = await ApiSync.GetAttendanceTodayAsync();
+                if (attendance != null)
+                {
+                    await RefreshStatusAndMenuAsync();
+                    return;
+                }
+            }
+            // After 3 attempts still null — just refresh (will show whatever data is available)
+            await RefreshStatusAndMenuAsync();
+        }
+
+        // Save reminder flag dates to disk so they survive app restarts
+        private void SaveReminderState()
+        {
+            try
+            {
+                var state = new
+                {
+                    LastCheckIn = _lastCheckInReminderDate?.ToString("O"),
+                    LastMorningTea = _lastMorningTeaReminderDate?.ToString("O"),
+                    LastLunch = _lastLunchReminderDate?.ToString("O"),
+                    LastEveningTea = _lastEveningTeaReminderDate?.ToString("O"),
+                    LastCheckOut = _lastCheckOutReminderDate?.ToString("O"),
+                };
+                System.IO.File.WriteAllText(ReminderStatePath,
+                    System.Text.Json.JsonSerializer.Serialize(state, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch { /* ignore */ }
+        }
+
+        private void LoadReminderState()
+        {
+            try
+            {
+                if (!System.IO.File.Exists(ReminderStatePath)) return;
+                using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(ReminderStatePath));
+                var root = doc.RootElement;
+                DateTime parse(string key) => root.TryGetProperty(key, out var p) && DateTime.TryParse(p.GetString(), out var d) ? d : DateTime.MinValue;
+                _lastCheckInReminderDate = parse("LastCheckIn");
+                _lastMorningTeaReminderDate = parse("LastMorningTea");
+                _lastLunchReminderDate = parse("LastLunch");
+                _lastEveningTeaReminderDate = parse("LastEveningTea");
+                _lastCheckOutReminderDate = parse("LastCheckOut");
+            }
+            catch { /* ignore */ }
         }
 
         private void UpdateStatusText(string status)
@@ -574,6 +670,9 @@ namespace HRMS_Agent
             var attendance = await ApiSync.GetAttendanceTodayAsync();
             var breaks = await ApiSync.GetBreaksTodayAsync();
 
+            // If API failed while logged in, don't fire reminders based on stale/missing data
+            if (attendance == null && ApiSync.IsLoggedIn) return;
+
             bool hasCheckedIn = attendance?.CheckInTime != null;
             bool hasCheckedOut = attendance?.CheckOutTime != null;
             bool isOnBreak = breaks.Exists(b => b.EndTime == null);
@@ -626,6 +725,7 @@ namespace HRMS_Agent
                 if (!hasCheckedIn && _lastCheckInReminderDate != today)
                 {
                     _lastCheckInReminderDate = today;
+                    SaveReminderState();
                     TriggerReminderPopup(ReminderType.CheckIn);
                     return;
                 }
@@ -641,7 +741,8 @@ namespace HRMS_Agent
                         if (DateTimeOffset.TryParse(b.StartTime, out var startOffset))
                         {
                             var localStart = startOffset.LocalDateTime.TimeOfDay;
-                            return localStart >= morningTeaStart && localStart <= morningTeaEnd;
+                            // Wide window: 09:30 – 12:00
+                            return localStart >= new TimeSpan(9, 30, 0) && localStart < new TimeSpan(12, 0, 0);
                         }
                         return false;
                     });
@@ -649,6 +750,7 @@ namespace HRMS_Agent
                     if (!tookMorningTea)
                     {
                         _lastMorningTeaReminderDate = today;
+                        SaveReminderState();
                         TriggerReminderPopup(ReminderType.MorningTea);
                         return;
                     }
@@ -665,7 +767,8 @@ namespace HRMS_Agent
                         if (DateTimeOffset.TryParse(b.StartTime, out var startOffset))
                         {
                             var localStart = startOffset.LocalDateTime.TimeOfDay;
-                            return localStart >= lunchStart && localStart <= lunchEnd;
+                            // Wide window: 12:00 – 15:00
+                            return localStart >= new TimeSpan(12, 0, 0) && localStart < new TimeSpan(15, 0, 0);
                         }
                         return false;
                     });
@@ -673,6 +776,7 @@ namespace HRMS_Agent
                     if (!tookLunch)
                     {
                         _lastLunchReminderDate = today;
+                        SaveReminderState();
                         TriggerReminderPopup(ReminderType.Lunch);
                         return;
                     }
@@ -689,7 +793,8 @@ namespace HRMS_Agent
                         if (DateTimeOffset.TryParse(b.StartTime, out var startOffset))
                         {
                             var localStart = startOffset.LocalDateTime.TimeOfDay;
-                            return localStart >= eveningTeaStart && localStart <= eveningTeaEnd;
+                            // Wide window: 15:00 – 18:00
+                            return localStart >= new TimeSpan(15, 0, 0) && localStart < new TimeSpan(18, 0, 0);
                         }
                         return false;
                     });
@@ -697,6 +802,7 @@ namespace HRMS_Agent
                     if (!tookEveningTea)
                     {
                         _lastEveningTeaReminderDate = today;
+                        SaveReminderState();
                         TriggerReminderPopup(ReminderType.EveningTea);
                         return;
                     }
@@ -716,6 +822,7 @@ namespace HRMS_Agent
                     if (now >= targetCheckoutTime && now <= targetCheckoutTime.AddMinutes(30))
                     {
                         _lastCheckOutReminderDate = today;
+                        SaveReminderState();
                         TriggerReminderPopup(ReminderType.CheckOut);
                         return;
                     }
