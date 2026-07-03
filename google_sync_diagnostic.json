@@ -1,0 +1,222 @@
+{
+  "timestamp": "2026-07-03T07:30:00.468Z",
+  "googleSheetConfigs": [
+    {
+      "id": 1,
+      "year": 202606,
+      "attendanceId": "1CDes8COJI9RXtpEtqXy7NTrvteEkArGG7Ezh1XsxFAE",
+      "updatesId": "1yMI5a9xs_8aQ92Bt0GjHlR8fZLKWoAR3ePEJva77IdI",
+      "createdAt": "2026-06-23T12:35:00.030Z",
+      "updatedAt": "2026-06-23T12:35:01.565Z"
+    },
+    {
+      "id": 2,
+      "year": 202607,
+      "attendanceId": null,
+      "updatesId": null,
+      "createdAt": "2026-07-01T03:10:00.020Z",
+      "updatedAt": "2026-07-01T03:10:00.020Z"
+    }
+  ],
+  "queueSummary": {
+    "totalPending": 0,
+    "totalCompleted": 219,
+    "totalFailed": 20,
+    "statusGrouped": [
+      {
+        "_count": {
+          "id": 97
+        },
+        "status": "FAILED"
+      },
+      {
+        "_count": {
+          "id": 219
+        },
+        "status": "COMPLETED"
+      }
+    ]
+  },
+  "failedTasksSample": [
+    {
+      "id": 316,
+      "entityType": "ATTENDANCE",
+      "entityId": 1850,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T07:20:01.463Z"
+    },
+    {
+      "id": 315,
+      "entityType": "ATTENDANCE",
+      "entityId": 1849,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T05:30:01.568Z"
+    },
+    {
+      "id": 314,
+      "entityType": "ATTENDANCE",
+      "entityId": 1848,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T04:30:05.653Z"
+    },
+    {
+      "id": 313,
+      "entityType": "ATTENDANCE",
+      "entityId": 1847,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T04:30:01.486Z"
+    },
+    {
+      "id": 312,
+      "entityType": "ATTENDANCE",
+      "entityId": 1846,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T04:15:05.559Z"
+    },
+    {
+      "id": 311,
+      "entityType": "ATTENDANCE",
+      "entityId": 1845,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T04:15:01.477Z"
+    },
+    {
+      "id": 310,
+      "entityType": "ATTENDANCE",
+      "entityId": 1844,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T04:05:01.392Z"
+    },
+    {
+      "id": 309,
+      "entityType": "ATTENDANCE",
+      "entityId": 1843,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T04:00:01.552Z"
+    },
+    {
+      "id": 308,
+      "entityType": "ATTENDANCE",
+      "entityId": 1842,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T03:55:01.361Z"
+    },
+    {
+      "id": 307,
+      "entityType": "ATTENDANCE",
+      "entityId": 1841,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T03:45:13.090Z"
+    },
+    {
+      "id": 306,
+      "entityType": "ATTENDANCE",
+      "entityId": 1840,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T03:45:09.343Z"
+    },
+    {
+      "id": 305,
+      "entityType": "ATTENDANCE",
+      "entityId": 1839,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T03:45:05.428Z"
+    },
+    {
+      "id": 304,
+      "entityType": "ATTENDANCE",
+      "entityId": 1838,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T03:45:01.508Z"
+    },
+    {
+      "id": 303,
+      "entityType": "ATTENDANCE",
+      "entityId": 1837,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T03:40:05.319Z"
+    },
+    {
+      "id": 302,
+      "entityType": "ATTENDANCE",
+      "entityId": 1836,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T03:40:01.367Z"
+    },
+    {
+      "id": 301,
+      "entityType": "ATTENDANCE",
+      "entityId": 1835,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T03:35:05.959Z"
+    },
+    {
+      "id": 300,
+      "entityType": "ATTENDANCE",
+      "entityId": 1834,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T03:35:01.325Z"
+    },
+    {
+      "id": 299,
+      "entityType": "ATTENDANCE",
+      "entityId": 1833,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T03:25:01.392Z"
+    },
+    {
+      "id": 298,
+      "entityType": "ATTENDANCE",
+      "entityId": 1832,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-03T03:15:01.331Z"
+    },
+    {
+      "id": 297,
+      "entityType": "ATTENDANCE",
+      "entityId": 1805,
+      "action": "UPSERT",
+      "retryCount": 3,
+      "lastError": "Could not create spreadsheet 'HRMS-July 2026'. Reason: The caller does not have permission. If you are using a free Gmail account, please create a spreadsheet named 'HRMS-July 2026' in your Google Drive and share it with 'hrms-bot@intellihrhub.iam.gserviceaccount.com' as an Editor.",
+      "updatedAt": "2026-07-02T16:40:01.491Z"
+    }
+  ]
+}

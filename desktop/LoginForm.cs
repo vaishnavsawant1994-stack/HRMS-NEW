@@ -112,9 +112,19 @@ namespace HRMS_Agent
             _btnCancel.FlatAppearance.BorderSize = 0;
             _btnCancel.Click += (s, e) => Close();
 
+            var lblVersion = new Label
+            {
+                Text = "Version 2.1",
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(127, 140, 141),
+                Location = new Point(20, 245),
+                Size = new Size(100, 15),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
             Controls.AddRange(new Control[] {
                 titleLabel, lblApiUrl, _txtApiUrl, lblEmail, _txtEmail, lblPassword, _txtPassword,
-                _lblStatus, _btnLogin, _btnCancel
+                _lblStatus, _btnLogin, _btnCancel, lblVersion
             });
 
             AcceptButton = _btnLogin;

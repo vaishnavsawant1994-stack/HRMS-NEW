@@ -18,7 +18,7 @@ async function runBackfill() {
   }
   
   const startRange = new Date("2026-05-01T00:00:00.000Z");
-  const endRange = new Date("2026-06-30T23:59:59.999Z");
+  const endRange = new Date("2026-07-31T23:59:59.999Z");
 
   const records = await prisma.attendance.findMany({
     where: {

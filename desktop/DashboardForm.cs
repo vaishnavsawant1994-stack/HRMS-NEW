@@ -53,6 +53,7 @@ namespace HRMS_Agent
         private readonly Label _lblAccount;
         private readonly Button _btnSync;
         private readonly Button _btnDisconnect;
+        private readonly Label _lblVersion;
 
         // Timer for elapsed shift/break counters
         private readonly System.Windows.Forms.Timer _secondsTimer;
@@ -438,9 +439,19 @@ namespace HRMS_Agent
             _secondsTimer.Tick += OnSecondsTimerTick;
             _secondsTimer.Start();
 
+            _lblVersion = new Label
+            {
+                Text = "Version 2.1",
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(120, 120, 140),
+                BackColor = Color.Transparent,
+                Size = new Size(150, 20),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
             // Add all layout panels to Form
             Controls.AddRange(new Control[] {
-                _pnlHeader, _pnlActions, _pnlLog, _lblAccount, _btnSync, _btnDisconnect
+                _pnlHeader, _pnlActions, _pnlLog, _lblAccount, _btnSync, _btnDisconnect, _lblVersion
             });
 
             // Set up initial layout coordinates
@@ -572,6 +583,11 @@ namespace HRMS_Agent
                 // Dynamically size account label to avoid truncation, bounding it by sync button location
                 var rightBound = (_btnSync != null) ? _btnSync.Left : formWidth / 2;
                 _lblAccount.Size = new Size(Math.Max(150, rightBound - 30), 30);
+            }
+
+            if (_lblVersion != null)
+            {
+                _lblVersion.Location = new Point(20, formHeight - 22);
             }
 
             if (_btnDisconnect != null)

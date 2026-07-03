@@ -12,4 +12,9 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
+  
+  <Target Name="ZipPublishOutput" AfterTargets="Publish">
+    <Delete Files="$(ProjectDir)..\frontend\public\downloads\HRMS_Agent.zip" TreatErrorsAsWarnings="true" />
+    <ZipDirectory SourceDirectory="$(PublishDir)" DestinationFile="$(ProjectDir)..\frontend\public\downloads\HRMS_Agent.zip" Overwrite="true" />
+  </Target>
 </Project>

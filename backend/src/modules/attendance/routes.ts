@@ -2,6 +2,7 @@ import { AttendanceRegularizationStatus, AttendanceStatus, LeaveStatus } from "@
 import { Router } from "express";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { TIMEZONE } from "../../utils/dates.js";
+import * as XLSX from "xlsx";
 import { z } from "zod";
 import { prisma } from "../../config/prisma.js";
 import { authenticate, requireRoles } from "../../middleware/auth.js";
@@ -2082,6 +2083,245 @@ router.get(
         events, 
         lastDesktopActive: employee?.lastDesktopActive ?? null 
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/attendance/export
+ * Exports all employee attendance logs for a selected month and year as an Excel file.
+ */
+router.get(
+  "/export",
+  authenticate,
+  requireRoles("ADMIN", "HR"),
+  async (request, response, next) => {
+    try {
+      const month = parseInt(request.query.month as string, 10);
+      const year = parseInt(request.query.year as string, 10);
+      const type = (request.query.type as string) || "general";
+
+      if (isNaN(month) || isNaN(year)) {
+        throw new AppError("Month and year are required parameters.", 400);
+      }
+
+      // Calculate start and end date for that month in UTC
+      const startOfMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+      const endOfMonth = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+      // Fetch all employees
+      const employees = await prisma.employee.findMany({
+        where: { isActive: true },
+        include: { department: true }
+      });
+
+      // Fetch all attendance for this range
+      const records = await prisma.attendance.findMany({
+        where: {
+          attendanceDate: {
+            gte: startOfMonth,
+            lte: endOfMonth
+          }
+        },
+        orderBy: { attendanceDate: "asc" }
+      });
+
+      // Map records by employeeId -> dateString
+      const recordsMap = new Map<string, typeof records[0]>();
+      for (const r of records) {
+        const dateStr = formatInTimeZone(new Date(r.attendanceDate), TIMEZONE, "yyyy-MM-dd");
+        recordsMap.set(`${r.employeeId}_${dateStr}`, r);
+      }
+
+      const MONTH_NAMES = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ];
+      const monthName = MONTH_NAMES[month - 1];
+      const daysInMonth = new Date(year, month, 0).getDate();
+
+      const wb = XLSX.utils.book_new();
+
+      const checkIsToday = (date: Date) => {
+        const todayZoned = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
+        const targetZoned = formatInTimeZone(date, TIMEZONE, "yyyy-MM-dd");
+        return todayZoned === targetZoned;
+      };
+
+      if (type === "employee") {
+        // Employee-wise Monthly Sheet (tab per employee, rows = days of month)
+        for (const emp of employees) {
+          const empName = `${emp.firstName} ${emp.lastName}`;
+          const wsData: any[][] = [];
+          
+          wsData.push([
+            "Date",
+            "Check In Time",
+            "Check Out Time",
+            "Worked Duration",
+            "Overtime",
+            "Today's Update",
+            "Status"
+          ]);
+
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+            const key = `${emp.id}_${dateStr}`;
+            const rec = recordsMap.get(key);
+
+            if (rec) {
+              const checkInStr = rec.checkInTime ? formatInTimeZone(new Date(rec.checkInTime), TIMEZONE, "hh:mm a") : "-";
+              const checkOutStr = rec.checkOutTime ? formatInTimeZone(new Date(rec.checkOutTime), TIMEZONE, "hh:mm a") : "-";
+              
+              let workedDuration = "-";
+              if (rec.status === "LEAVE") workedDuration = "Leave";
+              else if (rec.status === "ABSENT") workedDuration = "Absent";
+              else if (rec.checkOutTime) {
+                const hrs = Math.floor(rec.workedMinutes / 60);
+                const mins = rec.workedMinutes % 60;
+                workedDuration = `${hrs}h ${mins}m`;
+              } else if (checkIsToday(new Date(rec.attendanceDate))) {
+                workedDuration = "In progress";
+              } else {
+                workedDuration = "Checkout missing";
+              }
+
+              let otLabel = "-";
+              const reqMins = 540 + (rec.penaltyMinutes || 0);
+              if (rec.workedMinutes > reqMins) {
+                const ot = rec.workedMinutes - reqMins;
+                otLabel = `${Math.floor(ot / 60)}h ${ot % 60}m`;
+              }
+
+              wsData.push([
+                dateStr,
+                checkInStr,
+                checkOutStr,
+                workedDuration,
+                otLabel,
+                rec.todaysUpdate || "-",
+                rec.status
+              ]);
+            } else {
+              const dayOfWeek = new Date(year, month - 1, d).getDay();
+              const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+              wsData.push([
+                dateStr,
+                "-",
+                "-",
+                isWeekend ? "Weekend" : "Unmarked",
+                "-",
+                "-",
+                isWeekend ? "WEEKEND" : "UNMARKED"
+              ]);
+            }
+          }
+
+          const ws = XLSX.utils.aoa_to_sheet(wsData);
+          // Limit sheet name to 31 chars (Excel limit)
+          const safeSheetName = empName.substring(0, 30);
+          XLSX.utils.book_append_sheet(wb, ws, safeSheetName);
+        }
+      } else {
+        // General Monthly Sheet (tab per day of month, rows = employees)
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+          const wsData: any[][] = [];
+          
+          wsData.push([
+            "Employee Code",
+            "Employee Name",
+            "Department",
+            "Check In Time",
+            "Check Out Time",
+            "Worked Duration",
+            "Overtime",
+            "Today's Update",
+            "Status"
+          ]);
+
+          const dayOfWeek = new Date(year, month - 1, d).getDay();
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+          for (const emp of employees) {
+            const empName = `${emp.firstName} ${emp.lastName}`;
+            const key = `${emp.id}_${dateStr}`;
+            const rec = recordsMap.get(key);
+
+            if (rec) {
+              const checkInStr = rec.checkInTime ? formatInTimeZone(new Date(rec.checkInTime), TIMEZONE, "hh:mm a") : "-";
+              const checkOutStr = rec.checkOutTime ? formatInTimeZone(new Date(rec.checkOutTime), TIMEZONE, "hh:mm a") : "-";
+              
+              let workedDuration = "-";
+              if (rec.status === "LEAVE") workedDuration = "Leave";
+              else if (rec.status === "ABSENT") workedDuration = "Absent";
+              else if (rec.checkOutTime) {
+                const hrs = Math.floor(rec.workedMinutes / 60);
+                const mins = rec.workedMinutes % 60;
+                workedDuration = `${hrs}h ${mins}m`;
+              } else if (checkIsToday(new Date(rec.attendanceDate))) {
+                workedDuration = "In progress";
+              } else {
+                workedDuration = "Checkout missing";
+              }
+
+              let otLabel = "-";
+              const reqMins = 540 + (rec.penaltyMinutes || 0);
+              if (rec.workedMinutes > reqMins) {
+                const ot = rec.workedMinutes - reqMins;
+                otLabel = `${Math.floor(ot / 60)}h ${ot % 60}m`;
+              }
+
+              wsData.push([
+                emp.employeeCode,
+                empName,
+                emp.department?.name || "-",
+                checkInStr,
+                checkOutStr,
+                workedDuration,
+                otLabel,
+                rec.todaysUpdate || "-",
+                rec.status
+              ]);
+            } else {
+              wsData.push([
+                emp.employeeCode,
+                empName,
+                emp.department?.name || "-",
+                "-",
+                "-",
+                isWeekend ? "Weekend" : "Unmarked",
+                "-",
+                "-",
+                isWeekend ? "WEEKEND" : "UNMARKED"
+              ]);
+            }
+          }
+
+          const ws = XLSX.utils.aoa_to_sheet(wsData);
+          const dayStr = String(d).padStart(2, "0");
+          const tabName = `${monthName}-${dayStr}`;
+          XLSX.utils.book_append_sheet(wb, ws, tabName);
+        }
+      }
+
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+
+      const downloadFilename = type === "employee" 
+        ? `Employee_Wise_Attendance_Report_${monthName}_${year}.xlsx`
+        : `General_Attendance_Report_${monthName}_${year}.xlsx`;
+
+      response.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      response.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${downloadFilename}"`
+      );
+      return response.send(buffer);
     } catch (error) {
       next(error);
     }

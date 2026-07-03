@@ -1796,5 +1796,34 @@
     "expectedOutput": "Employees can take flexible breaks with exact 1-to-1 penalty minutes, and the desktop client remains robust against crashes, re-logins, registry failures, and network drops.",
     "createdAt": "2026-07-02T06:29:00Z",
     "updatedAt": "2026-07-02T06:30:00Z"
+  },
+  {
+    "taskId": "TSK-ATT-029",
+    "moduleId": "MOD-ATTENDANCE",
+    "sprint": "Sprint 4",
+    "project": "HRMS",
+    "page": "HR Panel / Attendance Page",
+    "module": "Attendance",
+    "submodule": "Offline Export & Google Sheets Sync",
+    "title": "Implement Offline Attendance Export & Resolve Google Sheets Sync Queue Blockers",
+    "description": "Resolved a bug in July 2026 Google Sheets sync where service account permission errors locked background sync tasks as FAILED. Created diagnostics and queue-reset scripts. Extended the backfill scripts range. Added a new endpoint GET /api/attendance/export to generate styled monthly attendance workbooks in-memory using xlsx. Added month selection select dropdown and Download Report button to the HR/Admin attendance page header.",
+    "frontendWork": "Added select month dropdown and Download Report button next to Correction Requests in AttendancePage.tsx. Invokes client-side fetch-and-save blob handling for files named by month.",
+    "backendWork": "Added GET /api/attendance/export endpoint to routes.ts. Created scripts/check-google-sheets-db.ts and scripts/reset-failed-syncs.ts, and modified scripts/backfillSheets.ts.",
+    "databaseWork": "None",
+    "apiWork": "GET /api/attendance/export",
+    "testingWork": "Verified Express backend API compiles successfully, and Excel download is triggered and downloaded with the correct named sheets.",
+    "priority": "HIGH",
+    "estimatedHours": 4,
+    "actualHours": 4,
+    "dependencies": [
+      "TSK-ATT-028"
+    ],
+    "riskLevel": "LOW",
+    "status": "COMPLETED",
+    "completionPercentage": 100,
+    "owner": "Fullstack Team",
+    "expectedOutput": "HR users can select any month and download an offline attendance report xlsx file, and failed Google Sheets sync tasks can be reset and backfilled up to July 31, 2026.",
+    "createdAt": "2026-07-03T13:30:00Z",
+    "updatedAt": "2026-07-03T14:30:00Z"
   }
 ]

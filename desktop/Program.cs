@@ -8,13 +8,41 @@ namespace HRMS_Agent
 {
     internal static class Program
     {
+        private static System.Threading.Mutex? _appMutex;
+
         [STAThread]
         private static void Main()
         {
-            ApplicationConfiguration.Initialize();
-            
-            using var context = new HRMSApplicationContext();
-            Application.Run(context);
+            const string mutexName = @"Local\IntelliHrHub_Agent_Mutex_Unique_998234";
+            _appMutex = new System.Threading.Mutex(true, mutexName, out bool isNewInstance);
+
+            if (!isNewInstance)
+            {
+                MessageBox.Show(
+                    "Another instance of the IntelliHrHub Desktop Agent is already running.",
+                    "Agent Already Running",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                return;
+            }
+
+            try
+            {
+                ApplicationConfiguration.Initialize();
+                using var context = new HRMSApplicationContext();
+                Application.Run(context);
+            }
+            finally
+            {
+                try
+                {
+                    _appMutex.ReleaseMutex();
+                }
+                catch (ObjectDisposedException) { }
+                catch (ApplicationException) { } // If mutex wasn't acquired successfully
+                _appMutex.Dispose();
+            }
         }
     }
 
@@ -904,6 +932,7 @@ namespace HRMS_Agent
                     actionText = "Start Break";
                     onAction = async () => {
                         var confirmResult = MessageBox.Show(
+                            _activeReminderForm,
                             "Are you sure you want to start your Morning Tea Break?",
                             "Confirm Start Break",
                             MessageBoxButtons.YesNo,
@@ -930,6 +959,7 @@ namespace HRMS_Agent
                     actionText = "Start Break";
                     onAction = async () => {
                         var confirmResult = MessageBox.Show(
+                            _activeReminderForm,
                             "Are you sure you want to start your Lunch Break?",
                             "Confirm Start Break",
                             MessageBoxButtons.YesNo,
@@ -956,6 +986,7 @@ namespace HRMS_Agent
                     actionText = "Start Break";
                     onAction = async () => {
                         var confirmResult = MessageBox.Show(
+                            _activeReminderForm,
                             "Are you sure you want to start your Evening Tea Break?",
                             "Confirm Start Break",
                             MessageBoxButtons.YesNo,
@@ -1013,6 +1044,7 @@ namespace HRMS_Agent
                                     int remM = (int)(remaining % 60);
 
                                     var warnResult = MessageBox.Show(
+                                        _activeReminderForm,
                                         $"⚠️ WARNING: You have not completed your required working hours today yet!\n\n" +
                                         $"You still have approximately {remH}h {remM}m remaining (including any late penalties).\n\n" +
                                         $"Are you sure you want to check out?",
@@ -1031,7 +1063,7 @@ namespace HRMS_Agent
 
                         using (var statusForm = new StatusUpdateForm())
                         {
-                            if (statusForm.ShowDialog() == DialogResult.OK)
+                            if (statusForm.ShowDialog(_activeReminderForm) == DialogResult.OK)
                             {
                                 string statusUpdate = statusForm.StatusUpdate;
                                 bool res = await ApiSync.CheckOutAsync(statusUpdate);
