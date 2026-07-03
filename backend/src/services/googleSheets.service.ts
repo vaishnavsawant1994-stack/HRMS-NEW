@@ -204,11 +204,10 @@ export async function initializeMonthlySheets(year: number, month: number) {
   return config;
 }
 
-/**
- * Helper to queue an attendance sync request.
- * Call this function whenever an attendance record is created or updated.
- */
 export async function queueAttendanceSync(attendanceId: number) {
+  if (process.env.DISABLE_GOOGLE_SHEETS_SYNC === "true") {
+    return;
+  }
   await prisma.googleSheetSyncQueue.create({
     data: {
       entityType: "ATTENDANCE",

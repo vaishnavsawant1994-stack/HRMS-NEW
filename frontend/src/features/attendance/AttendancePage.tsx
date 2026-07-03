@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import Modal from "../../components/common/Modal";
 import Table from "../../components/common/Table";
 import { ATTENDANCE_EVENT } from "../../components/common/attendanceQuickActionUtils";
-import { apiRequest } from "../../services/api";
+import { apiRequest, API_BASE_URL } from "../../services/api";
 import type { Attendance, AttendanceRegularizationRequest, Employee, Role } from "../../types";
 import { formatAttendanceTime, formatDateLabel, formatInTimeZone, formatWeekday, isToday, TIMEZONE, addMinutesToTime } from "../../utils/format";
 import { useApp } from "../../context/useApp";
@@ -332,6 +332,61 @@ export default function AttendancePage({ token, role, currentEmployeeId, current
   const [overtimePreApprovalOpen, setOvertimePreApprovalOpen] = useState(false);
   const [overtimeReason, setOvertimeReason] = useState("");
   const [submittingOvertime, setSubmittingOvertime] = useState(false);
+
+  const [downloadMonth, setDownloadMonth] = useState<number>(() => new Date().getMonth() + 1);
+  const [downloadYear, setDownloadYear] = useState<number>(() => new Date().getFullYear());
+  const [downloadType, setDownloadType] = useState<"general" | "employee">("general");
+  const [exporting, setExporting] = useState(false);
+
+  const handleDownloadOfflineSheet = async () => {
+    try {
+      setExporting(true);
+      const url = `${API_BASE_URL}/attendance/export?month=${downloadMonth}&year=${downloadYear}&type=${downloadType}`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+
+      if (!response.ok) {
+        let errMsg = "Export failed";
+        try {
+          const errJson = await response.json();
+          errMsg = errJson.message || errMsg;
+        } catch {
+          // ignore
+        }
+        throw new Error(errMsg);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      
+      const MONTH_NAMES = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ];
+      const monthName = MONTH_NAMES[downloadMonth - 1];
+      
+      const filename = downloadType === "employee"
+        ? `Employee_Wise_Attendance_Report_${monthName}_${downloadYear}.xlsx`
+        : `General_Attendance_Report_${monthName}_${downloadYear}.xlsx`;
+
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success("Attendance report downloaded successfully!");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to download attendance report.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const myTodayAttendance = useMemo(() => {
     if (!currentEmployeeId) return null;
@@ -1117,16 +1172,58 @@ export default function AttendancePage({ token, role, currentEmployeeId, current
               </div>
               <div className="button-row row-actions">
                 {(role === "ADMIN" || role === "HR") ? (
-                  <button
-                    className="secondary attendance-header-action"
-                    onClick={() => navigate("/attendance/requests")}
-                    style={{ position: 'relative' }}
-                  >
-                    Correction Requests
-                    {visibleRegularizations.filter(r => r.status === "PENDING").length > 0 && (
-                      <span className="notification-dot" style={{ position: 'absolute', top: '-4px', right: '-4px' }}></span>
-                    )}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="secondary attendance-header-action"
+                      onClick={() => navigate("/attendance/requests")}
+                      style={{ position: 'relative' }}
+                    >
+                      Correction Requests
+                      {visibleRegularizations.filter(r => r.status === "PENDING").length > 0 && (
+                        <span className="notification-dot" style={{ position: 'absolute', top: '-4px', right: '-4px' }}></span>
+                      )}
+                    </button>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <select
+                        className="attendance-date-input"
+                        style={{ minWidth: "160px", cursor: "pointer", height: '42px', minHeight: '42px', borderRadius: '999px', padding: '0 24px 0 16px', border: '1px solid rgba(15, 23, 42, 0.08)', background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.98), #f7fbff)', color: 'var(--color-text-strong)', fontWeight: 'var(--fw-semibold)', fontSize: 'var(--text-sm)' }}
+                        value={`${downloadMonth}-${downloadYear}`}
+                        onChange={(e) => {
+                          const [m, y] = e.target.value.split("-").map(Number);
+                          setDownloadMonth(m);
+                          setDownloadYear(y);
+                        }}
+                      >
+                        {monthOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        className="attendance-date-input"
+                        style={{ minWidth: "160px", cursor: "pointer", height: '42px', minHeight: '42px', borderRadius: '999px', padding: '0 24px 0 16px', border: '1px solid rgba(15, 23, 42, 0.08)', background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.98), #f7fbff)', color: 'var(--color-text-strong)', fontWeight: 'var(--fw-semibold)', fontSize: 'var(--text-sm)' }}
+                        value={downloadType}
+                        onChange={(e) => setDownloadType(e.target.value as "general" | "employee")}
+                      >
+                        <option value="general">General Monthly</option>
+                        <option value="employee">Employee-wise</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        className="secondary attendance-header-action"
+                        style={{ minHeight: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        onClick={handleDownloadOfflineSheet}
+                        disabled={exporting}
+                      >
+                        {exporting ? "Downloading..." : "Download Report"}
+                      </button>
+                    </div>
+                  </>
                 ) : (
                   <div className="button-row">
                     {showPaidOvertimeRequestBtn && (

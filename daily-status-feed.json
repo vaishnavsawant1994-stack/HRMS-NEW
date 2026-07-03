@@ -327,5 +327,12 @@
     "title": "Filter out pre-checkin events and restore manual checkin active status on live-status",
     "status": "COMPLETED",
     "narrative": "Updated the GET /api/attendance/live-status endpoint in routes.ts to filter and ignore desktop activity logs recorded prior to the employee's check-in timestamp, and removed the offline agent check from the status mapper to ensure manually checked-in users display as ACTIVE rather than OFFLINE."
+  },
+  {
+    "date": "2026-07-03",
+    "taskId": "TSK-ATT-029",
+    "title": "Implement Offline Attendance Export & Resolve Google Sheets Sync Queue Blockers",
+    "status": "COMPLETED",
+    "narrative": "Resolved Google Sheets API 'caller does not have permission' errors for July 2026 spreadsheet creation by implementing diagnostic and queue reset utilities (check-google-sheets-db.ts and reset-failed-syncs.ts). Extended the Google Sheets backfiller range to July 31st. Created a backend GET /api/attendance/export route that compiles all active employee attendance logs for a chosen month/year into a styled spreadsheet. Added month selection controls and a 'Download Report' button to the HR/Admin web panel header to trigger browser-side downloads. Completely disabled the background Google Sheets sync queueing and processing loop in code using a DISABLE_GOOGLE_SHEETS_SYNC environment flag in .env, and configured docker-compose.prod.yml to forward this flag to the production container."
   }
 ]

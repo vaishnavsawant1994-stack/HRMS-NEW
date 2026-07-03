@@ -26,6 +26,9 @@ async function getCachedTabs(spreadsheetId: string, sheetsClient: any): Promise<
  * Main worker loop invoked by the Scheduler
  */
 export async function processGoogleSheetSyncQueue() {
+  if (process.env.DISABLE_GOOGLE_SHEETS_SYNC === "true") {
+    return;
+  }
   if (isRunning) return;
   
   if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
