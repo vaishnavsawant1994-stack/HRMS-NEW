@@ -1854,5 +1854,34 @@
     "expectedOutput": "Dashboard hero background covers the entire card height with no transparent white horizontal bleed-through.",
     "createdAt": "2026-07-06T11:45:00Z",
     "updatedAt": "2026-07-06T11:46:00Z"
+  },
+  {
+    "taskId": "TSK-ATT-032",
+    "moduleId": "MOD-DESKTOP",
+    "sprint": "Sprint 4",
+    "project": "HRMS",
+    "page": "Desktop Client App",
+    "module": "Desktop Client",
+    "submodule": "Auto-Start & Network Resilience",
+    "title": "Implement resilient silent re-authentication on system startup",
+    "description": "Resolved a boot-time logic error where startup silent authentication attempts failed on slow network interfaces, triggering premature login prompt modals. Introduced a network error detection flag and updated the background polling loop and network changed listeners to attempt silent re-authentication automatically once connectivity is established.",
+    "frontendWork": "None",
+    "backendWork": "None",
+    "databaseWork": "None",
+    "apiWork": "None",
+    "testingWork": "Verified build succeeds with local dotnet compiler. Ensured background polling and network address change handlers execute silent reconnect logic successfully without prompting modal.",
+    "priority": "MEDIUM",
+    "estimatedHours": 1,
+    "actualHours": 1,
+    "dependencies": [
+      "TSK-ATT-031"
+    ],
+    "riskLevel": "LOW",
+    "status": "COMPLETED",
+    "completionPercentage": 100,
+    "owner": "Fullstack Team",
+    "expectedOutput": "Desktop agent launches silently on boot without displaying login prompts during transient network connectivity drops, and reconnects once online.",
+    "createdAt": "2026-07-06T12:05:00Z",
+    "updatedAt": "2026-07-06T12:08:00Z"
   }
 ]

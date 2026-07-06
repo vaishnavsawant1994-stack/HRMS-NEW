@@ -341,5 +341,12 @@
     "title": "Resolve Dashboard Hero Section White Strip Bug",
     "status": "COMPLETED",
     "narrative": "Resolved a layout rendering bug where a mysterious horizontal white strip appeared across the middle of the dashboard's hero section card. The card base styling (.card) applied a semi-transparent white background and backdrop-filter, which bled through when individual background properties were overridden. Fixed this by applying a clean background shorthand with !important and setting backdrop-filter to none."
+  },
+  {
+    "date": "2026-07-06",
+    "taskId": "TSK-ATT-032",
+    "title": "Implement resilient silent re-authentication on system startup",
+    "status": "COMPLETED",
+    "narrative": "Resolved a startup auto-login bug in the C# desktop agent application. During boot-time launch, slow local network interface connection speeds caused initial silent token refreshes to fail with network exceptions, prompting the login credentials dialog immediately. Introduced a transient network error flag to run silently in system tray during offline startup, and configured background timers and network change address listeners to trigger silent re-authentication once connection is restored."
   }
 ]

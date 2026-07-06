@@ -108,6 +108,7 @@ namespace HRMS_Agent
 
         public static ShiftRecord? CurrentShift { get; private set; }
         public static string? LastLoggedEvent { get; set; }
+        public static bool LastLoginWasNetworkError { get; private set; }
 
         public static event Action<string>? OnStatusChanged;
         public static event Action<string, DateTime>? OnEventLogged;
@@ -259,6 +260,7 @@ namespace HRMS_Agent
                 var response = await _httpClient.PostAsync($"{_config.ApiUrl}/api/auth/login", content);
                 if (!response.IsSuccessStatusCode)
                 {
+                    LastLoginWasNetworkError = false;
                     return false;
                 }
 
@@ -295,14 +297,17 @@ namespace HRMS_Agent
                         
                         // Try syncing offline items
                         _ = ProcessOfflineQueueAsync();
+                        LastLoginWasNetworkError = false;
                         return true;
                     }
                 }
+                LastLoginWasNetworkError = false;
                 return false;
             }
             catch (Exception ex)
             {
                 OnStatusChanged?.Invoke($"Login failed: {ex.Message}");
+                LastLoginWasNetworkError = true;
                 return false;
             }
         }
