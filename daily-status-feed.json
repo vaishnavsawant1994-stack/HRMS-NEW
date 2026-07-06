@@ -334,5 +334,12 @@
     "title": "Implement Offline Attendance Export & Resolve Google Sheets Sync Queue Blockers",
     "status": "COMPLETED",
     "narrative": "Resolved Google Sheets API 'caller does not have permission' errors for July 2026 spreadsheet creation by implementing diagnostic and queue reset utilities (check-google-sheets-db.ts and reset-failed-syncs.ts). Extended the Google Sheets backfiller range to July 31st. Created a backend GET /api/attendance/export route that compiles all active employee attendance logs for a chosen month/year into a styled spreadsheet. Added month selection controls and a 'Download Report' button to the HR/Admin web panel header to trigger browser-side downloads. Completely disabled the background Google Sheets sync queueing and processing loop in code using a DISABLE_GOOGLE_SHEETS_SYNC environment flag in .env, and configured docker-compose.prod.yml to forward this flag to the production container."
+  },
+  {
+    "date": "2026-07-06",
+    "taskId": "TSK-ATT-031",
+    "title": "Resolve Dashboard Hero Section White Strip Bug",
+    "status": "COMPLETED",
+    "narrative": "Resolved a layout rendering bug where a mysterious horizontal white strip appeared across the middle of the dashboard's hero section card. The card base styling (.card) applied a semi-transparent white background and backdrop-filter, which bled through when individual background properties were overridden. Fixed this by applying a clean background shorthand with !important and setting backdrop-filter to none."
   }
 ]
