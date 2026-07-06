@@ -152,10 +152,11 @@ namespace HRMS_Agent
                 await RefreshStatusAndMenuAsync();
             };
 
-            // Sync offline queue immediately when network connection state changes
-            System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (s, e) =>
+            // Sync offline queue and retry authentication immediately when network connection state changes
+            System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += async (s, e) =>
             {
                 _ = ApiSync.ProcessOfflineQueueAsync();
+                await RefreshStatusAndMenuAsync();
             };
 
             // Start monitors
@@ -190,6 +191,11 @@ namespace HRMS_Agent
                         {
                             ShowDashboardForm();
                             _ = StartupDataRetryAsync();
+                        }
+                        else if (ApiSync.LastLoginWasNetworkError)
+                        {
+                            // Transient network connectivity error — run silently in tray
+                            UpdateStatusText("Waiting for network...");
                         }
                         else
                         {
@@ -353,10 +359,41 @@ namespace HRMS_Agent
         {
             if (!ApiSync.IsLoggedIn)
             {
-                UpdateTrayContextMenu(null, new List<BreakSessionRecord>());
-                UpdateStatusText("Not connected");
-                _dashboardForm?.UpdateState(null, new List<BreakSessionRecord>(), null);
-                return;
+                if (ApiSync.HasStoredCredentials && ApiSync.LastLoginWasNetworkError)
+                {
+                    // Attempt background reconnect silently if the previous failure was a transient network error
+                    UpdateStatusText("Reconnecting...");
+                    bool refreshed = await ApiSync.TryRefreshTokenAsync();
+                    if (refreshed)
+                    {
+                        _trayIcon.ShowBalloonTip(3000, "Agent Connected", $"Successfully linked to {ApiSync.CurrentEmail}", ToolTipIcon.Info);
+                        ShowDashboardForm();
+                        _ = StartupDataRetryAsync();
+                    }
+                    else if (ApiSync.LastLoginWasNetworkError)
+                    {
+                        UpdateTrayContextMenu(null, new List<BreakSessionRecord>());
+                        UpdateStatusText("Waiting for network...");
+                        _dashboardForm?.UpdateState(null, new List<BreakSessionRecord>(), null);
+                        return;
+                    }
+                    else
+                    {
+                        // Stored credentials invalidated or password changed
+                        UpdateTrayContextMenu(null, new List<BreakSessionRecord>());
+                        UpdateStatusText("Not connected");
+                        _dashboardForm?.UpdateState(null, new List<BreakSessionRecord>(), null);
+                        ShowLoginForm();
+                        return;
+                    }
+                }
+                else
+                {
+                    UpdateTrayContextMenu(null, new List<BreakSessionRecord>());
+                    UpdateStatusText("Not connected");
+                    _dashboardForm?.UpdateState(null, new List<BreakSessionRecord>(), null);
+                    return;
+                }
             }
 
             // Sync offline queue in the background (survives offline sleep/shutdown events)
