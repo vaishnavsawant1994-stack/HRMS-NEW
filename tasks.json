@@ -1825,5 +1825,34 @@
     "expectedOutput": "HR users can select any month and download an offline attendance report xlsx file, and failed Google Sheets sync tasks can be reset and backfilled up to July 31, 2026.",
     "createdAt": "2026-07-03T13:30:00Z",
     "updatedAt": "2026-07-03T14:30:00Z"
+  },
+  {
+    "taskId": "TSK-ATT-031",
+    "moduleId": "MOD-DASHBOARD",
+    "sprint": "Sprint 4",
+    "project": "HRMS",
+    "page": "Dashboard Page",
+    "module": "Dashboard UI",
+    "submodule": "Hero Section Layout Fix",
+    "title": "Resolve Dashboard Hero Section White Strip Bug",
+    "description": "Resolved a layout rendering bug where a mysterious horizontal white strip appeared across the middle of the dashboard's hero section card. The card base styling (.card) applied a semi-transparent white background and backdrop-filter, which bled through when individual background properties were overridden. Fixed this by applying a clean background shorthand with !important and setting backdrop-filter to none.",
+    "frontendWork": "Updated DashboardPage.css to completely override the .card background shorthand and disable backdrop-filters on .dashboard-hero.",
+    "backendWork": "None",
+    "databaseWork": "None",
+    "apiWork": "None",
+    "testingWork": "Verified layout renders correctly on both Employee and Management dashboards, and checked that the purple background covers the entire card with no white horizontal gaps.",
+    "priority": "MEDIUM",
+    "estimatedHours": 1,
+    "actualHours": 1,
+    "dependencies": [
+      "TSK-ATT-029"
+    ],
+    "riskLevel": "LOW",
+    "status": "COMPLETED",
+    "completionPercentage": 100,
+    "owner": "Fullstack Team",
+    "expectedOutput": "Dashboard hero background covers the entire card height with no transparent white horizontal bleed-through.",
+    "createdAt": "2026-07-06T11:45:00Z",
+    "updatedAt": "2026-07-06T11:46:00Z"
   }
 ]
