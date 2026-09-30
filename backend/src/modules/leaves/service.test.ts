@@ -12,6 +12,16 @@ import {
   requiresMedicalProof,
 } from "./service.js";
 
+function currentQuarterDate(day: number) {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function currentFinancialYear() {
+  const now = new Date();
+  return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
 function createTestLeaveType(overrides: Partial<{
   code: string;
   name: string;
@@ -284,8 +294,8 @@ test("createLeaveRequestForEmployee limits quarterly leave to visible balance", 
     {
       actor: { id: 1, role: "EMPLOYEE", employeeId: 99, email: "user@test.com" },
       leaveTypeId: 1,
-      startDate: "2026-04-10",
-      endDate: "2026-04-12",
+      startDate: currentQuarterDate(10),
+      endDate: currentQuarterDate(12),
       startDayDuration: "FULL_DAY",
       endDayDuration: "FULL_DAY",
       reason: "Personal work",
@@ -298,7 +308,7 @@ test("createLeaveRequestForEmployee limits quarterly leave to visible balance", 
           defaultDaysPerYear: 12,
           allocationMode: "QUARTERLY",
           quarterlyAllocationDays: 3,
-          policyEffectiveFromYear: 2026,
+          policyEffectiveFromYear: currentFinancialYear(),
         }),
       findLeaveBalance: async () => ({ remainingDays: 12, visibleDays: 1, carryForwardDays: 0 }),
     }),
@@ -313,8 +323,8 @@ test("createLeaveRequestForEmployee marks long sick leave as medical-proof requi
     {
       actor: { id: 1, role: "EMPLOYEE", employeeId: 99, email: "user@test.com" },
       leaveTypeId: 1,
-      startDate: "2026-04-10",
-      endDate: "2026-04-12",
+      startDate: currentQuarterDate(10),
+      endDate: currentQuarterDate(12),
       startDayDuration: "FULL_DAY",
       endDayDuration: "FULL_DAY",
       reason: "Medical rest",
@@ -330,7 +340,7 @@ test("createLeaveRequestForEmployee marks long sick leave as medical-proof requi
           carryForwardAllowed: true,
           carryForwardCap: 15,
           requiresAttachmentAfterDays: 2,
-          policyEffectiveFromYear: 2026,
+          policyEffectiveFromYear: currentFinancialYear(),
         }),
       findLeaveBalance: async () => ({ remainingDays: 8, visibleDays: 8, carryForwardDays: 0 }),
     }),
@@ -346,8 +356,8 @@ test("createLeaveRequestForEmployee requires proof for two-day sick leave", asyn
     {
       actor: { id: 1, role: "EMPLOYEE", employeeId: 99, email: "user@test.com" },
       leaveTypeId: 1,
-      startDate: "2026-04-10",
-      endDate: "2026-04-11",
+      startDate: currentQuarterDate(10),
+      endDate: currentQuarterDate(11),
       startDayDuration: "FULL_DAY",
       endDayDuration: "FULL_DAY",
       reason: "Medical rest",
@@ -363,7 +373,7 @@ test("createLeaveRequestForEmployee requires proof for two-day sick leave", asyn
           carryForwardAllowed: true,
           carryForwardCap: 15,
           requiresAttachmentAfterDays: 2,
-          policyEffectiveFromYear: 2026,
+          policyEffectiveFromYear: currentFinancialYear(),
         }),
       findLeaveBalance: async () => ({ remainingDays: 8, visibleDays: 8, carryForwardDays: 0 }),
     }),
