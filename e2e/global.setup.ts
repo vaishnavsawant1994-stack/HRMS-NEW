@@ -30,7 +30,7 @@ async function globalSetup() {
   const context = await request.newContext({ baseURL: API_URL });
 
   for (const { role, email, password } of ROLES) {
-    const response = await context.post("/auth/login", {
+    const response = await context.post("auth/login", {
       data: { email, password },
     });
 
