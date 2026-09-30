@@ -158,7 +158,7 @@ jobs:
       - name: Prepare E2E database and role fixtures
         run: |
           npm --workspace backend run prisma:generate
-          npm --workspace backend exec -- prisma migrate deploy
+          npm --workspace backend exec -- prisma db push
           npm --workspace backend run prisma:seed
           npx tsx backend/scripts/create-hr-admin-test-users.ts
         env:
