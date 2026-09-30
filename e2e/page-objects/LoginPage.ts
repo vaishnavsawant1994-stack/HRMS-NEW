@@ -15,7 +15,7 @@ export class LoginPage {
   constructor(page: Page) {
     this.page = page;
     this.emailInput    = page.getByLabel(/email/i);
-    this.passwordInput = page.getByLabel(/password/i);
+    this.passwordInput = page.locator('input[type="password"]');
     this.submitButton  = page.getByRole("button", { name: /sign in|log in|login/i });
     this.errorMessage  = page.getByRole("alert").or(page.locator(".error-message, .toast-error, [data-testid='error']")).first();
   }
