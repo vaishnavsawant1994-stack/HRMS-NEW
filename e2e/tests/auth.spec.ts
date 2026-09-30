@@ -14,7 +14,7 @@ test.describe("Authentication Flow", () => {
     // Using the same credentials from global.setup.ts
     await loginPage.login(
       process.env.E2E_ADMIN_EMAIL ?? "admin@intellisys.com",
-      process.env.E2E_ADMIN_PASS ?? "admin123"
+      process.env.E2E_ADMIN_PASS ?? "Password@123"
     );
 
     await loginPage.expectRedirectedToDashboard();
@@ -32,7 +32,7 @@ test.describe("Authentication Flow", () => {
   });
 
   test("Direct URL access without auth redirects to login @smoke @auth", async ({ page }) => {
-    await page.goto("/dashboard");
+    await page.goto("/");
     await expect(page).toHaveURL(/.*login.*/);
   });
 });

@@ -23,13 +23,23 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://test:test@localhost:5432/hrms_test
+      JWT_SECRET: test-jwt-secret
+      GOOGLE_CLIENT_ID: test-google-client
+      GOOGLE_CLIENT_SECRET: test-google-secret
+      GOOGLE_REDIRECT_URL: http://localhost:4000/api/auth/google/callback
+      VAPID_PUBLIC_KEY: BLmXAV-LjtCatBowM7h_lyQkJOoBxiSHv2lX4q1BqurZVdFU0Hzh1Z_zJ9uG72CwquqBEgypPCnlQAmbbo-BGcI
+      VAPID_PRIVATE_KEY: D2di7KxVZxsDs75hJk-d35qa6Qp5tOq7YMxMiYdHQKs
+      VAPID_SUBJECT: mailto:test@example.com
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: "npm"
@@ -73,10 +83,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: "npm"
@@ -116,13 +126,27 @@ jobs:
     name: Playwright E2E Smoke
     runs-on: ubuntu-latest
     needs: [backend, frontend]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hrms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d hrms_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: "npm"
@@ -131,6 +155,15 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Prepare E2E database and role fixtures
+        run: |
+          npm --workspace backend run prisma:generate
+          npm --workspace backend exec -- prisma db push
+          npm --workspace backend run prisma:seed
+          npx tsx backend/scripts/create-hr-admin-test-users.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hrms_test
+
       - name: Install Playwright Browsers
         working-directory: e2e
         run: npx playwright install --with-deps chromium
@@ -138,7 +171,15 @@ jobs:
       - name: Start backend (background)
         run: npm --workspace backend run dev &
         env:
-          DATABASE_URL: "postgresql://fake:fake@localhost:5432/fake"
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hrms_test
+          JWT_SECRET: test-jwt-secret
+          GOOGLE_CLIENT_ID: test-google-client
+          GOOGLE_CLIENT_SECRET: test-google-secret
+          GOOGLE_REDIRECT_URL: http://localhost:4000/api/auth/google/callback
+          VAPID_PUBLIC_KEY: BLmXAV-LjtCatBowM7h_lyQkJOoBxiSHv2lX4q1BqurZVdFU0Hzh1Z_zJ9uG72CwquqBEgypPCnlQAmbbo-BGcI
+          VAPID_PRIVATE_KEY: D2di7KxVZxsDs75hJk-d35qa6Qp5tOq7YMxMiYdHQKs
+          VAPID_SUBJECT: mailto:test@example.com
 
       - name: Start frontend (background)
         run: npm --workspace frontend run dev &
@@ -173,10 +214,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: "npm"

@@ -1,6 +1,7 @@
 import "../../test/setup";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import CalendarPage from "./CalendarPage";
 import { mockApiRoutes } from "../../test/api";
 import { createCalendarDay } from "../../test/fixtures";
@@ -40,7 +41,11 @@ describe("CalendarPage", () => {
       },
     ]);
 
-    render(<CalendarPage token="token" role="EMPLOYEE" />);
+    render(
+      <MemoryRouter>
+        <CalendarPage token="token" role="EMPLOYEE" />
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByText("Founders Day")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add holiday/i })).not.toBeInTheDocument();
@@ -62,7 +67,11 @@ describe("CalendarPage", () => {
       },
     ]);
 
-    render(<CalendarPage token="token" role="HR" />);
+    render(
+      <MemoryRouter>
+        <CalendarPage token="token" role="HR" />
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByRole("button", { name: /add holiday/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /working saturday/i })).toBeInTheDocument();

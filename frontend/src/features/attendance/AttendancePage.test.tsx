@@ -2,6 +2,7 @@ import "../../test/setup";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import { MemoryRouter } from "react-router-dom";
+import { AppProvider } from "../../context/AppProvider";
 import AttendancePage from "./AttendancePage";
 import { mockApiRoutes } from "../../test/api";
 import { createAttendance, createEmployee } from "../../test/fixtures";
@@ -30,12 +31,14 @@ describe("AttendancePage", () => {
 
     render(
       <MemoryRouter>
-        <AttendancePage
+        <AppProvider token="token" role="EMPLOYEE">
+          <AttendancePage
           token="token"
           role="EMPLOYEE"
           currentEmployeeId={1}
           currentEmployee={employee}
-        />
+          />
+        </AppProvider>
       </MemoryRouter>,
     );
 
@@ -60,12 +63,14 @@ describe("AttendancePage", () => {
 
     render(
       <MemoryRouter>
-        <AttendancePage
+        <AppProvider token="token" role="EMPLOYEE">
+          <AttendancePage
           token="token"
           role="EMPLOYEE"
           currentEmployeeId={1}
           currentEmployee={employee}
-        />
+          />
+        </AppProvider>
       </MemoryRouter>,
     );
 
@@ -92,12 +97,14 @@ describe("AttendancePage", () => {
 
     render(
       <MemoryRouter>
-        <AttendancePage
+        <AppProvider token="token" role="EMPLOYEE">
+          <AttendancePage
           token="token"
           role="EMPLOYEE"
           currentEmployeeId={1}
           currentEmployee={employee}
-        />
+          />
+        </AppProvider>
       </MemoryRouter>,
     );
 
