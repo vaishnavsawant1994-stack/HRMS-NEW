@@ -7,6 +7,7 @@ export { API_URL };
 
 export default defineConfig({
   testDir: "./tests",
+  globalSetup: "./global.setup.ts",
   fullyParallel: true,
 
   // Max 2 retries on CI, 0 locally for fast feedback
@@ -38,19 +39,12 @@ export default defineConfig({
   },
 
   projects: [
-    // ── Auth setup (runs first, produces saved sessions) ──────────────────
-    {
-      name: "setup",
-      testMatch: /global\.setup\.ts/,
-    },
-
     // ── Chromium (primary browser) ─────────────────────────────────────────
     {
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
       },
-      dependencies: ["setup"],
     },
 
     // ── API tests (no browser, no auth dependency) ─────────────────────────
