@@ -15,10 +15,10 @@ const AUTH_DIR = path.join(__dirname, ".auth");
 
 // ─── Seed credentials (must exist in the test DB) ─────────────────────────────
 const ROLES = [
-  { role: "admin",    email: process.env.E2E_ADMIN_EMAIL    ?? "admin@intellisys.com",    password: process.env.E2E_ADMIN_PASS    ?? "admin123" },
-  { role: "hr",       email: process.env.E2E_HR_EMAIL       ?? "hr@intellisys.com",       password: process.env.E2E_HR_PASS       ?? "hr123" },
-  { role: "manager",  email: process.env.E2E_MANAGER_EMAIL  ?? "manager@intellisys.com",  password: process.env.E2E_MANAGER_PASS  ?? "manager123" },
-  { role: "employee", email: process.env.E2E_EMPLOYEE_EMAIL ?? "employee@intellisys.com", password: process.env.E2E_EMPLOYEE_PASS ?? "employee123" },
+  { role: "admin",    email: process.env.E2E_ADMIN_EMAIL    ?? "admin@intellisys.com",    password: process.env.E2E_ADMIN_PASS    ?? "Password@123" },
+  { role: "hr",       email: process.env.E2E_HR_EMAIL       ?? "hr@intellisys.com",       password: process.env.E2E_HR_PASS       ?? "Password@123" },
+  { role: "manager",  email: process.env.E2E_MANAGER_EMAIL  ?? "manager@intellisys.com",  password: process.env.E2E_MANAGER_PASS  ?? "Password@123" },
+  { role: "employee", email: process.env.E2E_EMPLOYEE_EMAIL ?? "employee@intellisys.com", password: process.env.E2E_EMPLOYEE_PASS ?? "Password@123" },
 ] as const;
 
 async function globalSetup() {
