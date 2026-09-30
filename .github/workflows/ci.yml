@@ -30,8 +30,8 @@ jobs:
       GOOGLE_CLIENT_ID: test-google-client
       GOOGLE_CLIENT_SECRET: test-google-secret
       GOOGLE_REDIRECT_URL: http://localhost:4000/api/auth/google/callback
-      VAPID_PUBLIC_KEY: test-vapid-public
-      VAPID_PRIVATE_KEY: test-vapid-private
+      VAPID_PUBLIC_KEY: BLmXAV-LjtCatBowM7h_lyQkJOoBxiSHv2lX4q1BqurZVdFU0Hzh1Z_zJ9uG72CwquqBEgypPCnlQAmbbo-BGcI
+      VAPID_PRIVATE_KEY: D2di7KxVZxsDs75hJk-d35qa6Qp5tOq7YMxMiYdHQKs
       VAPID_SUBJECT: mailto:test@example.com
 
     steps:
@@ -154,8 +154,8 @@ jobs:
           GOOGLE_CLIENT_ID: test-google-client
           GOOGLE_CLIENT_SECRET: test-google-secret
           GOOGLE_REDIRECT_URL: http://localhost:4000/api/auth/google/callback
-          VAPID_PUBLIC_KEY: test-vapid-public
-          VAPID_PRIVATE_KEY: test-vapid-private
+          VAPID_PUBLIC_KEY: BLmXAV-LjtCatBowM7h_lyQkJOoBxiSHv2lX4q1BqurZVdFU0Hzh1Z_zJ9uG72CwquqBEgypPCnlQAmbbo-BGcI
+          VAPID_PRIVATE_KEY: D2di7KxVZxsDs75hJk-d35qa6Qp5tOq7YMxMiYdHQKs
           VAPID_SUBJECT: mailto:test@example.com
 
       - name: Start frontend (background)
