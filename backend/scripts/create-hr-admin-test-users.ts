@@ -23,6 +23,24 @@ const testUsers = [
     roleName: RoleName.HR,
     departmentCode: "HR",
     jobTitle: "HR Manager",
+  },
+  {
+    email: "manager@intellisys.com",
+    firstName: "Test",
+    lastName: "Manager",
+    employeeCode: "TEST-MANAGER",
+    roleName: RoleName.MANAGER,
+    departmentCode: "SD",
+    jobTitle: "Engineering Manager",
+  },
+  {
+    email: "employee@intellisys.com",
+    firstName: "Test",
+    lastName: "Employee",
+    employeeCode: "TEST-EMPLOYEE",
+    roleName: RoleName.EMPLOYEE,
+    departmentCode: "SD",
+    jobTitle: "Software Engineer",
   }
 ];
 
@@ -39,7 +57,7 @@ async function main() {
   const joiningDate = new Date();
   const financialYear = getFinancialYearForDate(joiningDate);
 
-  console.log("Starting test user seeding for HR and Admin profiles...");
+  console.log("Starting test user seeding for E2E role profiles...");
 
   for (const userConfig of testUsers) {
     console.log(`Processing: ${userConfig.email} (${userConfig.roleName})...`);
