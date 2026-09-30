@@ -176,7 +176,10 @@ async function main() {
 }
 
 main()
-  .catch((e) => console.error("Error creating test users:", e))
+  .catch((e) => {
+    console.error("Error creating test users:", e);
+    process.exitCode = 1;
+  })
   .finally(async () => {
     await prisma.$disconnect();
   });
